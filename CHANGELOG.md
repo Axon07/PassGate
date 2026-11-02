@@ -1,10 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- Built-in HTTPS: Let's Encrypt certificates via DNS challenge (Cloudflare, or any lego provider), automatic renewal with no restart, or upload your own certificate; HTTP visits are redirected to HTTPS and login cookies are marked Secure
-- Free-access promotions: scheduled free period with a one-tap "Connect free" button, custom message, and a thank-you note with the paid plans afterwards
-
 ## v0.1.0 — first public release
 
 PassGate is a self-hosted captive portal that sells Wi-Fi access through Stripe.
@@ -23,9 +18,11 @@ PassGate is a self-hosted captive portal that sells Wi-Fi access through Stripe.
 
 **For the owner**
 - First-run setup wizard and browser-based admin: plans, guests, comp passes, password resets, blocking, activity log
+- Free-access promotions: a scheduled free period with a one-tap "Connect free" button and your message, then a thank-you note pointing to the paid plans
 - Per-guest device limits, swap cooldown, always-online MAC list
 - Optional speed tiers per plan through OPNsense's traffic shaper
 
 **Platform**
+- Built-in HTTPS: free Let's Encrypt certificates via DNS challenge (Cloudflare or 150+ other providers), renewed automatically with no restart, or upload your own certificate
 - OPNsense driver (firewall aliases via the API); dry-run mode for trying it out
 - Single Python process + SQLite; multi-arch Docker image (amd64, arm64) on GHCR; Unraid template
