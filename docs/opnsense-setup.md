@@ -108,8 +108,9 @@ the admin page through OPNsense (section 5).
   `10.50.0.10 – 10.50.3.250`, lease time **86400** (24 h). Long leases keep IPs stable.
 - **SERVICES**: static `10.51.0.1/29`. No DHCP needed.
 - **Services → Unbound DNS**: enabled on all interfaces. Add a **host override** for the portal name,
-  e.g. `wifi.yourdomain.ca → 10.51.0.2`. A real domain you own is safest for Stripe's return link. A
-  local-only name like `wifi.lake.lan` normally works too, since the guest's phone does the redirect.
+  e.g. `wifi.yourdomain.ca → 10.51.0.2`. Use a name in a domain you own: it's what PassGate's built-in
+  HTTPS gets a certificate for (section 10). A local-only name like `wifi.lan` works too, but then the
+  portal can only run on plain HTTP.
 
 ## 3. Aliases (Firewall → Aliases)
 
@@ -138,7 +139,7 @@ the admin page through OPNsense (section 5).
 | # | Action | Proto | Source | Destination | Port | Why |
 |---|---|---|---|---|---|---|
 | 1 | Pass | TCP/UDP | GUEST net | GUEST address | 53 | DNS for everyone |
-| 2 | Pass | TCP | GUEST net | `portal_host` | 80 | the portal (incl. redirected traffic) |
+| 2 | Pass | TCP | GUEST net | `portal_host` | 80, 443 | the portal (incl. redirected traffic) |
 | 3 | Pass | any | **`paid_clients`** | **`private_nets` (Invert)** | any | paid guests → internet only |
 | 4 | Block | any | GUEST net | any | any | everything else (log it while testing) |
 
@@ -240,6 +241,36 @@ connection can carry, which is fine. The point is that one guest can't take it a
 7. Reboot OPNsense → the alias comes back empty and PassGate refills it within 30 s.
 
 Then switch Stripe to your **live** key and you're open for business.
+
+## 10. HTTPS for the portal (recommended)
+
+Card details never touch PassGate (they're entered on Stripe's page), but guests' emails, passwords and
+login cookies do, and on an open SSID those cross the air unencrypted. PassGate can get and renew a free
+Let's Encrypt certificate by itself:
+
+1. You need a domain you own, with its DNS at Cloudflare (free plan is fine) or another
+   [provider lego supports](https://go-acme.github.io/lego/dns/).
+2. Pick the portal name (e.g. `wifi.yourdomain.ca`) and add the Unbound host override above for it.
+   No public DNS record is needed, and nothing has to be reachable from the internet: PassGate proves
+   you own the domain by briefly creating a DNS record through the provider's API (a "DNS challenge"),
+   so it works behind CGNAT.
+3. Cloudflare: *My Profile → API Tokens → Create Token → "Edit zone DNS"*, limited to that domain.
+4. PassGate admin → **HTTPS** → *Free certificate from Let's Encrypt*, enter the name, an email (Let's
+   Encrypt requires one) and the token, then **Get certificate now**. Tick *Test mode* first if you want
+   to try the settings without using up Let's Encrypt's rate limits.
+5. Make sure GUEST rule 2 allows port **443** to `portal_host`.
+
+Within a minute the portal is served at `https://wifi.yourdomain.ca`. Phones still discover the sign-in
+page over plain HTTP (that's how captive detection works everywhere) and PassGate immediately sends them
+to the HTTPS address. Certificates renew automatically 30 days before expiry, with no restart.
+
+Already have a certificate (from Nginx Proxy Manager, a wildcard, your own CA)? Choose *Use my own
+certificate files* and upload `fullchain.pem` and `privkey.pem` instead. You'll need to re-upload it
+when it's renewed elsewhere.
+
+**Optional, on the Wi-Fi side:** many newer APs (UniFi included) support **Enhanced Open (OWE)**, which
+encrypts an open SSID without a password. Older devices don't support it, so it's usually run in
+"transition" mode alongside the plain open network.
 
 ## Optional extras
 

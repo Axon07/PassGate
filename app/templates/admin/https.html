@@ -1,0 +1,103 @@
+{% extends "admin/base.html" %}
+{% set page = 'https' %}
+{% block body %}
+<div class="card" style="max-width:760px">
+  <h2>HTTPS for the guest portal</h2>
+  <p class="muted" style="margin-top:-4px">Card payments already happen on Stripe's secure page. HTTPS also protects what
+    guests type into the portal itself (email, password, login cookie), which otherwise crosses the open Wi-Fi unencrypted.</p>
+  <p>Status:
+    {% if info and not info.error %}
+      <span class="pill" style="background:var(--ok-bg);color:var(--ok)">On</span>
+      guests use <strong>{{ portal_url }}</strong> · certificate for {{ info.names|join(', ') or 'this site' }},
+      expires {{ fmt_ts(info.expires) }} ({{ info.days_left }} days)
+    {% elif mode == 'off' %}<span class="pill">Off</span> guests use plain HTTP
+    {% else %}<span class="pill" style="color:var(--warn)">Waiting for a certificate</span>{% endif %}
+  </p>
+  {% if last_result %}<div class="note {{ 'ok' if 'obtained' in last_result or 'up to date' in last_result or 'renewed' in last_result else 'warn' }}">{{ last_result }}</div>{% endif %}
+  {% for p in problems %}<div class="note warn">{{ p }}</div>{% endfor %}
+
+  <form method="post" action="/https">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f">Certificate</label>
+    <select name="tls_mode" id="tlsmode" onchange="tg()">
+      <option value="off" {{ 'selected' if mode == 'off' }}>Off (HTTP only)</option>
+      <option value="letsencrypt" {{ 'selected' if mode == 'letsencrypt' }}>Free certificate from Let's Encrypt (automatic)</option>
+      <option value="files" {{ 'selected' if mode == 'files' }}>Use my own certificate files</option>
+    </select>
+
+    <div id="m-common">
+      <label class="f">Portal domain name</label>
+      <input type="text" name="tls_domain" value="{{ s.tls_domain }}" placeholder="wifi.example.com">
+      <div class="help">A name in a domain you own. In OPNsense, add a DNS host override pointing it at PassGate
+        (e.g. 10.51.0.2) and allow guests to reach port 443. See the network guide.</div>
+    </div>
+
+    <div id="m-le">
+      <label class="f">Email for Let's Encrypt</label>
+      <input type="email" name="tls_email" value="{{ s.tls_email }}" placeholder="you@example.com">
+      <div class="help">Required by Let's Encrypt and only sent to them.</div>
+      <label class="f">DNS provider</label>
+      <select name="tls_dns_provider" id="prov" onchange="tg()">
+        <option value="cloudflare" {{ 'selected' if s.tls_dns_provider in ('', 'cloudflare') }}>Cloudflare</option>
+        <option value="other" {{ 'selected' if s.tls_dns_provider not in ('', 'cloudflare') }}>Another provider (advanced)</option>
+      </select>
+      <div id="p-cf">
+        <label class="f">Cloudflare API token</label>
+        <input type="password" name="tls_cloudflare_token" autocomplete="off"
+               placeholder="{{ '•••••••• saved, leave blank to keep' if s.tls_cloudflare_token else 'paste token' }}">
+        <div class="help">Cloudflare → My Profile → API Tokens → Create Token → "Edit zone DNS" template, limited to your domain.</div>
+      </div>
+      <div id="p-other">
+        <label class="f">Provider code</label>
+        <input type="text" name="tls_dns_provider_other" value="{{ '' if s.tls_dns_provider in ('', 'cloudflare') else s.tls_dns_provider }}" placeholder="e.g. route53, digitalocean, namecheap">
+        <label class="f">Provider settings (one per line)</label>
+        <textarea name="tls_dns_env" placeholder="{{ 'saved, leave blank to keep' if s.tls_dns_env else 'NAMECHEAP_API_USER=…&#10;NAMECHEAP_API_KEY=…' }}"></textarea>
+        <div class="help">PassGate uses lego, which supports 150+ DNS providers. Codes and settings for each are listed at
+          go-acme.github.io/lego/dns.</div>
+      </div>
+      <label style="display:flex;gap:8px;margin-top:10px"><input type="checkbox" name="tls_staging" {{ 'checked' if s.tls_staging == '1' }}>
+        Test mode (Let's Encrypt staging: browsers will warn; use while getting the settings right)</label>
+    </div>
+
+    <div id="m-files">
+      <p class="help">Upload the certificate chain and private key (PEM). Leave a field empty to keep the current file.</p>
+    </div>
+    <button class="full">Save</button>
+  </form>
+
+  <form method="post" action="/https/upload" enctype="multipart/form-data" id="f-upload" style="margin-top:12px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="row">
+      <div><label class="f">Certificate (fullchain.pem)</label><input type="file" name="cert" accept=".pem,.crt,.cer"></div>
+      <div><label class="f">Private key (privkey.pem)</label><input type="file" name="key" accept=".pem,.key"></div>
+    </div>
+    <button class="ghost full">Upload files</button>
+  </form>
+
+  {% if mode == 'letsencrypt' %}
+  <form method="post" action="/https/issue" style="margin-top:12px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost full">{{ 'Renew now' if info and not info.error else 'Get certificate now' }}</button>
+    <div class="help" style="text-align:center">Takes up to a couple of minutes. PassGate also checks twice a day and renews 30 days before expiry.</div>
+  </form>
+  {% endif %}
+</div>
+<div class="card" style="max-width:760px">
+  <h2>How guests reach it</h2>
+  <p class="muted" style="margin:0">Phones always find a sign-in page over plain HTTP. That's how captive-portal detection works
+    on every brand. Once HTTPS is on, PassGate immediately sends them on to <code>https://{{ s.tls_domain or 'your-domain' }}</code>, so
+    everything they type is encrypted. The admin page stays on your private network.</p>
+</div>
+<script>
+function tg(){
+  var m = document.getElementById('tlsmode').value, other = document.getElementById('prov').value === 'other';
+  document.getElementById('m-common').style.display = m === 'off' ? 'none' : '';
+  document.getElementById('m-le').style.display = m === 'letsencrypt' ? '' : 'none';
+  document.getElementById('m-files').style.display = m === 'files' ? '' : 'none';
+  document.getElementById('f-upload').style.display = m === 'files' ? '' : 'none';
+  document.getElementById('p-cf').style.display = other ? 'none' : '';
+  document.getElementById('p-other').style.display = other ? '' : 'none';
+}
+tg();
+</script>
+{% endblock %}

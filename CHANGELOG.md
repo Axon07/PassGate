@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Built-in HTTPS: Let's Encrypt certificates via DNS challenge (Cloudflare, or any lego provider), automatic renewal with no restart, or upload your own certificate; HTTP visits are redirected to HTTPS and login cookies are marked Secure
 - Free-access promotions: scheduled free period with a one-tap "Connect free" button, custom message, and a thank-you note with the paid plans afterwards
 
 ## v0.1.0 — first public release

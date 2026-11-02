@@ -687,3 +687,108 @@ def test_28_free_promotion():
     r = adm.post("/promo", data={"csrf": csrf(page), "promo_enabled": "on", "promo_start": _local(7200),
                                  "promo_end": _local(3600)})
     assert "won%27t+run" in r.headers["location"] or "won't" in r.headers["location"]
+
+
+# ---- HTTPS ---------------------------------------------------------------------
+
+def _self_signed(dirpath, name="wifi.example.test"):
+    import subprocess
+    cert, key = os.path.join(dirpath, "c.pem"), os.path.join(dirpath, "k.pem")
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                    "-nodes", "-keyout", key, "-out", cert, "-days", "30", "-subj", f"/CN={name}",
+                    "-addext", f"subjectAltName=DNS:{name}"], check=True, capture_output=True)
+    return cert, key
+
+
+def test_29_https_with_own_certificate():
+    from app import tls
+    db.set("promo_enabled", "0")
+    assert tls.mode() == "off" and not tls.active() and tls.portal_url() == "http://testserver"
+    adm = _admin()
+    page = adm.get("/https")
+    assert page.status_code == 200 and "HTTPS for the guest portal" in page.text
+    adm.post("/https", data={"csrf": csrf(page), "tls_mode": "files", "tls_domain": "wifi.example.test"})
+    assert tls.mode() == "files" and not tls.active()
+    assert "no certificate yet" in adm.get("/").text
+    # a mismatched pair is refused
+    d1, d2 = tempfile.mkdtemp(), tempfile.mkdtemp()
+    c1, k1 = _self_signed(d1)
+    c2, k2 = _self_signed(d2)
+    page = adm.get("/https")
+    r = adm.post("/https/upload", data={"csrf": csrf(page)},
+                 files={"cert": ("c.pem", open(c1, "rb").read()), "key": ("k.pem", open(k2, "rb").read())})
+    assert "don%27t+work" in r.headers["location"] or "work+together" in r.headers["location"]
+    assert not tls.active()
+    r = adm.post("/https/upload", data={"csrf": csrf(page)},
+                 files={"cert": ("c.pem", open(c1, "rb").read()), "key": ("k.pem", open(k1, "rb").read())})
+    assert tls.active()
+    info = tls.cert_info()
+    assert info["names"] == ["wifi.example.test"] and info["days_left"] >= 28
+    assert tls.portal_url() == "https://wifi.example.test"
+    assert tls.ssl_context() is not None
+    assert "wifi.example.test" in adm.get("/https").text
+
+    # guests: captive probes and plain-HTTP visits all end up on https://<domain>
+    c = guest("10.50.9.1", "90:00:00:00:00:01")
+    r = c.get("/hotspot-detect.html", headers={"host": "captive.apple.com"})
+    assert r.headers["location"] == "https://wifi.example.test/"
+    r = c.get("/account?x=1", headers={"host": "wifi.example.test"})
+    assert r.status_code == 302 and r.headers["location"] == "https://wifi.example.test/account?x=1"
+    assert c.get("/healthz").status_code == 200
+    assert c.get("/api/captive").json()["user-portal-url"] == "https://wifi.example.test/"
+    # over HTTPS the page is served, and the login cookie is marked Secure
+    s = TestClient(PORTAL, base_url="https://wifi.example.test", client=("10.50.9.1", 40000), follow_redirects=False)
+    assert s.get("/").status_code == 200
+    r = s.post("/login", data={"email": "guest@example.com", "password": "secret1"})
+    assert "secure" in r.headers.get("set-cookie", "").lower()
+    # Stripe sends guests back to the HTTPS address
+    assert billing.portal_base() == "https://wifi.example.test"
+    # turning it off goes back to plain HTTP
+    page = adm.get("/https")
+    adm.post("/https", data={"csrf": csrf(page), "tls_mode": "off"})
+    assert not tls.active() and tls.portal_url() == "http://testserver"
+
+
+def test_30_letsencrypt_settings_and_lego(tmp_path, monkeypatch):
+    from app import tls
+    adm = _admin()
+    page = adm.get("/https")
+    adm.post("/https", data={"csrf": csrf(page), "tls_mode": "letsencrypt", "tls_domain": "WiFi.Example.com.",
+                             "tls_dns_provider": "cloudflare"})
+    assert tls.domain() == "wifi.example.com"
+    probs = " ".join(tls.problems())
+    assert "email" in probs and "Cloudflare" in probs
+    # a fake lego that fails and echoes its token: the token must not leak into the UI
+    fake = tmp_path / "lego"
+    fake.write_text("#!/bin/sh\necho \"error talking to cloudflare with token $CF_DNS_API_TOKEN\" >&2\nexit 1\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    page = adm.get("/https")
+    adm.post("/https", data={"csrf": csrf(page), "tls_mode": "letsencrypt", "tls_domain": "wifi.example.com",
+                             "tls_email": "me@example.com", "tls_dns_provider": "cloudflare",
+                             "tls_cloudflare_token": "SECRET-TOKEN-123", "tls_staging": "on"})
+    assert tls.problems() == []
+    cmd = tls.lego_command("run")
+    assert cmd[-1] == "run" and "--dns" in cmd and "cloudflare" in cmd and "wifi.example.com" in cmd
+    assert tls.LE_STAGING in cmd and "SECRET-TOKEN-123" not in " ".join(cmd)
+    assert tls.lego_command("renew")[-4:] == ["renew", "--days", "30", "--no-random-sleep"]
+    ok, msg = tls.obtain_or_renew()
+    assert not ok and "SECRET-TOKEN-123" not in msg and "•••" in msg
+    assert "SECRET-TOKEN-123" not in adm.get("/https").text
+    # a fake lego that "issues" a certificate: PassGate picks it up
+    certdir = os.path.join(tls.LEGO_DIR, "certificates")
+    os.makedirs(certdir, exist_ok=True)
+    c, k = _self_signed(str(tmp_path), "wifi.example.com")
+    fake.write_text(f"#!/bin/sh\ncp {c} {certdir}/wifi.example.com.crt; cp {k} {certdir}/wifi.example.com.key\n"
+                    "echo 'Server responded with a certificate.'\n")
+    ok, msg = tls.obtain_or_renew()
+    assert ok and tls.active() and tls.portal_url() == "https://wifi.example.com"
+    # other providers take settings as KEY=VALUE lines
+    page = adm.get("/https")
+    adm.post("/https", data={"csrf": csrf(page), "tls_mode": "letsencrypt", "tls_domain": "wifi.example.com",
+                             "tls_email": "me@example.com", "tls_dns_provider": "other",
+                             "tls_dns_provider_other": "namecheap", "tls_dns_env": "NAMECHEAP_API_USER=u\nNAMECHEAP_API_KEY=k"})
+    prov, env = tls.provider_env()
+    assert prov == "namecheap" and env["NAMECHEAP_API_KEY"] == "k"
+    page = adm.get("/https")
+    adm.post("/https", data={"csrf": csrf(page), "tls_mode": "off"})

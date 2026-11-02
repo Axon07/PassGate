@@ -39,7 +39,8 @@ def _get(obj, key, default=None):
 
 
 def portal_base() -> str:
-    return (db.get("portal_url") or "http://localhost").rstrip("/")
+    from .tls import portal_url
+    return (portal_url() or "http://localhost").rstrip("/")
 
 
 def _extras_product_data(n: int) -> dict:

@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import access, billing, db
 from . import extras as xs
-from . import promo
+from . import promo, tls
 from .templating import STATIC_DIR, render
 from .gateway import valid_mac
 from .util import check_pw, hash_pw
@@ -41,12 +41,17 @@ async def captive_redirect(request: Request, call_next):
     path = request.url.path
     if path.startswith(("/static", "/stripe/webhook", "/api/captive", "/healthz")):
         return await call_next(request)
-    portal = db.get("portal_url")
+    portal = tls.portal_url()
     if portal:
         want = (urlparse(portal).hostname or "").lower()
         host = (request.headers.get("host") or "").split(":")[0].lower()
         if want and host and host != want:
             return RedirectResponse(portal.rstrip("/") + "/", status_code=302)
+        if portal.startswith("https://") and request.url.scheme == "http":
+            # Phones find the portal over plain HTTP (that's how captive
+            # detection works); everything after that happens over HTTPS.
+            target = portal.rstrip("/") + request.url.path + (f"?{request.url.query}" if request.url.query else "")
+            return RedirectResponse(target, status_code=302 if request.method in ("GET", "HEAD") else 307)
     if db.get("setup_complete") != "1":
         return render("message.html", status_code=503, title="Almost ready",
                       message="This Wi-Fi portal hasn't been set up yet.")
@@ -402,7 +407,7 @@ def captive_api(request: Request):
     """RFC 8908 Captive Portal API (advertise it with DHCP option 114)."""
     _, uid = access.identify(client_ip(request))
     online = bool(uid and access.has_access(uid))
-    out = {"captive": not online, "user-portal-url": (db.get("portal_url") or "").rstrip("/") + "/"}
+    out = {"captive": not online, "user-portal-url": (tls.portal_url() or "").rstrip("/") + "/"}
     if online:
         out["seconds-remaining"] = max(0, (access.access_until(uid) or 0) - db.now())
     return JSONResponse(out, media_type="application/captive+json")
@@ -413,7 +418,20 @@ def health():
     return {"ok": True}
 
 
+class SchemeAwareSessions:
+    """Session cookies get the Secure flag when the request came in over
+    HTTPS, so once HTTPS is on, logins are never sent in the clear."""
+
+    def __init__(self, app, secret):
+        kw = dict(secret_key=secret, session_cookie="pg_session", max_age=60 * 60 * 24 * 120, same_site="lax")
+        self.plain = SessionMiddleware(app, https_only=False, **kw)
+        self.secure = SessionMiddleware(app, https_only=True, **kw)
+
+    async def __call__(self, scope, receive, send):
+        target = self.secure if scope.get("scheme") == "https" else self.plain
+        await target(scope, receive, send)
+
+
 def build(secret: str):
-    app.add_middleware(SessionMiddleware, secret_key=secret, session_cookie="pg_session",
-                       max_age=60 * 60 * 24 * 120, same_site="lax", https_only=False)
+    app.add_middleware(SchemeAwareSessions, secret=secret)
     return app

@@ -74,6 +74,7 @@ Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weeken
 - **Fails closed:** if the server is off, guests get nothing (not free internet)
 - **Any access points:** UniFi, TP-Link, OpenWrt, HaLow bridges and others
 - One Python process + SQLite. Upgrades migrate the database on start
+- **Built-in HTTPS:** free Let's Encrypt certificates via DNS challenge (Cloudflare and 150+ providers), renewed automatically, even behind CGNAT
 - MIT licensed. Your data stays on your hardware
 
 </td>
@@ -116,7 +117,7 @@ PassGate only decides **who** gets through; the firewall enforces it. Guest traf
 
 > **Try it first, no router needed:**
 > ```bash
-> docker run -d --name passgate-try -p 8090:80 -p 8091:8081 -v passgate-try:/data ghcr.io/axon07/passgate:latest
+> docker run -d --name passgate-try -p 8090:80 -p 8443:443 -p 8091:8081 -v passgate-try:/data ghcr.io/axon07/passgate:latest
 > ```
 > Open `http://localhost:8091/setup`, then the guest page on port 8090. In dry-run mode payments work (use a Stripe test key) but nobody is actually let online.
 
@@ -212,6 +213,15 @@ The device takes one of the account's slots and shows *"Connected through pa•�
 </details>
 
 <details>
+<summary><b>🔒 HTTPS</b></summary>
+
+Card details never pass through PassGate, since guests enter them on Stripe's page. But emails, passwords and login cookies typed into the portal cross an open Wi-Fi network unencrypted unless the portal uses HTTPS.
+
+Admin → **HTTPS** → *Free certificate from Let's Encrypt*: enter a name in a domain you own (e.g. `wifi.yourdomain.com`), an email, and a Cloudflare API token, then **Get certificate now**. PassGate proves you own the domain with a DNS challenge, so the portal never has to be reachable from the internet. It renews automatically. Other DNS providers work through the advanced option, and you can upload your own certificate files instead. Full steps are in [section 10 of the network guide](docs/opnsense-setup.md#10-https-for-the-portal-recommended).
+
+</details>
+
+<details>
 <summary><b>🎉 Free promotions</b></summary>
 
 Admin → *Promotions*. Set a start and end time, a headline and a message (for example *"Free Wi-Fi this long weekend! Like it? The monthly plan is $25"*). During the promotion the sign-in page shows a **Connect free** button: one tap, no account or card, online until the promotion ends. Paid plans are shown right underneath, and paying guests aren't affected.
@@ -235,7 +245,8 @@ Speeds are enforced by the router. PassGate can't do it because guest traffic ne
 
 | Port | What | Who should reach it |
 |------|------|---------------------|
-| `80` | Guest portal, `/stripe/webhook`, `/api/captive` | guests |
+| `80` | Guest portal over HTTP (captive detection, then redirect to HTTPS when it's on), `/stripe/webhook`, `/api/captive` | guests |
+| `443` | Guest portal over HTTPS, once a certificate is set up | guests |
 | `8081` | Admin dashboard | only you, via the OPNsense WAN port-forward. It refuses the guest subnet. |
 
 - **Data** lives in `/data/passgate.db` (SQLite). Back up that folder.

@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from datetime import datetime
 
-from . import access, billing, db, promo
+from . import access, billing, db, promo, tls
 from .gateway import get_driver, speed_tiers, valid_mac
 from .templating import STATIC_DIR, TIMEZONES, render
 from .util import check_pw, fmt_ts, hash_pw, ip_in, tz
@@ -186,6 +186,10 @@ def dashboard(request: Request):
     if promo.active():
         warnings.append(f"A free-access promotion is running until {fmt_ts(promo.active()[1])} "
                         f"({len(promo.devices())} devices connected free). Manage it under Promotions.")
+    if tls.mode() != "off" and not tls.active():
+        warnings.append("HTTPS is set up but there's no certificate yet. See the HTTPS page.")
+    elif tls.active() and (tls.cert_info() or {}).get("days_left", 99) < 14:
+        warnings.append("The HTTPS certificate expires in under 2 weeks. Check the HTTPS page.")
     if not db.get("portal_url"):
         warnings.append("Set the portal address in Settings so phones get redirected correctly.")
     return render("admin/dashboard.html", request=request, stats=stats, events=events, warnings=warnings,
@@ -462,6 +466,95 @@ async def guest_action(request: Request, uid: int):
                 msg = f"Stripe error: {e}"
     access.sync()
     return RedirectResponse(f"/guests/{uid}?msg=" + msg.replace(" ", "+"), status_code=303)
+
+
+# ---- HTTPS -------------------------------------------------------------------------
+
+@app.get("/https", response_class=HTMLResponse)
+def https_page(request: Request, msg: str = ""):
+    if (r := guard(request)):
+        return r
+    keys = ("tls_domain", "tls_email", "tls_dns_provider", "tls_cloudflare_token", "tls_dns_env", "tls_staging")
+    return render("admin/https.html", request=request, msg=msg, mode=tls.mode(), s={k: db.get(k) for k in keys},
+                  info=tls.cert_info(), problems=tls.problems() if tls.mode() == "letsencrypt" else [],
+                  last_result=db.get("tls_last_result") if tls.mode() == "letsencrypt" else "",
+                  portal_url=tls.portal_url())
+
+
+@app.post("/https")
+async def https_save(request: Request):
+    if (r := guard(request)):
+        return r
+    f = await request.form()
+    if not csrf_ok(request, f.get("csrf", "")):
+        return RedirectResponse("/https", status_code=303)
+    mode = f.get("tls_mode") if f.get("tls_mode") in ("off", "letsencrypt", "files") else "off"
+    changed = (mode, (f.get("tls_domain") or "").strip().lower()) != (tls.mode(), tls.domain())
+    db.set("tls_mode", mode)
+    db.set("tls_domain", (f.get("tls_domain") or "").strip().lower().rstrip(".")[:253])
+    db.set("tls_email", (f.get("tls_email") or "").strip()[:254])
+    provider = "cloudflare" if f.get("tls_dns_provider") != "other" else \
+        (f.get("tls_dns_provider_other") or "").strip().lower()[:40]
+    db.set("tls_dns_provider", provider)
+    if f.get("tls_cloudflare_token"):
+        db.set("tls_cloudflare_token", f["tls_cloudflare_token"].strip())
+    if f.get("tls_dns_env"):
+        db.set("tls_dns_env", f["tls_dns_env"].strip()[:4000])
+    db.set("tls_staging", "1" if f.get("tls_staging") else "0")
+    if changed:
+        db.set("tls_last_check", "0")  # check straight away
+        db.set("tls_last_result", "")
+    msg = "Saved." + (" PassGate will request the certificate within a minute."
+                      if mode == "letsencrypt" and not tls.active() and not tls.problems() else "")
+    return RedirectResponse("/https?msg=" + msg.replace(" ", "+"), status_code=303)
+
+
+@app.post("/https/issue")
+def https_issue(request: Request, csrf: str = Form("")):
+    if (r := guard(request)) or not csrf_ok(request, csrf):
+        return r or RedirectResponse("/https", status_code=303)
+    import threading
+    db.set("tls_last_result", "Working on it… refresh this page in a minute.")
+    threading.Thread(target=tls.obtain_or_renew, kwargs={"force": not tls.active()}, daemon=True).start()
+    return RedirectResponse("/https", status_code=303)
+
+
+@app.post("/https/upload")
+async def https_upload(request: Request):
+    if (r := guard(request)):
+        return r
+    f = await request.form()
+    if not csrf_ok(request, f.get("csrf", "")):
+        return RedirectResponse("/https", status_code=303)
+    import os
+    import ssl
+    os.makedirs(tls.TLS_DIR, exist_ok=True)
+    data = {}
+    for field, path in (("cert", tls.OWN_CERT), ("key", tls.OWN_KEY)):
+        up = f.get(field)
+        if up is not None and getattr(up, "filename", ""):
+            data[path] = await up.read()
+    if not data:
+        return RedirectResponse("/https?msg=Choose+a+file+to+upload", status_code=303)
+    # Check the pair works before replacing what's there.
+    cert = data.get(tls.OWN_CERT) or (open(tls.OWN_CERT, "rb").read() if os.path.exists(tls.OWN_CERT) else b"")
+    key = data.get(tls.OWN_KEY) or (open(tls.OWN_KEY, "rb").read() if os.path.exists(tls.OWN_KEY) else b"")
+    if cert and key:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            c, k = os.path.join(tmp, "c.pem"), os.path.join(tmp, "k.pem")
+            open(c, "wb").write(cert)
+            open(k, "wb").write(key)
+            try:
+                ssl.create_default_context(ssl.Purpose.CLIENT_AUTH).load_cert_chain(c, k)
+            except Exception as e:
+                return RedirectResponse("/https?msg=" + f"Those files don't work together: {e}".replace(" ", "+")[:300],
+                                        status_code=303)
+    for path, content in data.items():
+        with open(path, "wb") as fh:
+            fh.write(content)
+        os.chmod(path, 0o600)
+    return RedirectResponse("/https?msg=Uploaded.+HTTPS+starts+within+30+seconds.", status_code=303)
 
 
 # ---- free-access promotion ------------------------------------------------------
