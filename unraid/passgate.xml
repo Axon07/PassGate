@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/Axon07/Passgate/issues</Support>
   <Project>https://github.com/Axon07/Passgate</Project>
-  <Overview>Sell Wi-Fi passes with Stripe. A self-hosted captive portal for campgrounds, lakes, cabins, RV parks and marinas: guests join your open Wi-Fi, pick a day, weekend or monthly pass, pay by card and are online right away. Works with any access points; the firewall side uses OPNsense.[br][br]
+  <Overview>Sell Wi-Fi passes with Stripe. A self-hosted captive portal for campgrounds, lakes, cabins, RV parks and marinas: guests join your open Wi-Fi, pick a day, weekend or monthly pass, pay by card and are online right away. Works with any access points; the firewall side uses OPNsense or OpenWrt.[br][br]
 [b]Trying it out:[/b] the defaults run on the normal bridge network in dry-run mode. Open the WebUI, finish the setup wizard, and click through the guest pages on the portal port.[br][br]
 [b]For real use:[/b] set Network Type to your services VLAN (e.g. br0.51) with a fixed IP (e.g. 10.51.0.2). The port settings are then ignored (the portal listens on 80 and 443, the admin page on 8081). See the network guide in the project's docs.</Overview>
   <Category>Network:Web Network:Other Tools:</Category>
@@ -21,7 +21,7 @@
   <CPUset/>
   <DonateText/>
   <DonateLink/>
-  <Requires>OPNsense (as a VM or separate box) for the firewall side. Not needed for trying it out.</Requires>
+  <Requires>An OPNsense or OpenWrt router for the firewall side (see the guides on GitHub). Not needed for trying it out.</Requires>
   <Config Name="Guest portal port" Target="80" Default="8090" Mode="tcp" Description="Port for the guest sign-in pages (bridge mode only)." Type="Port" Display="always" Required="true" Mask="false">8090</Config>
   <Config Name="Guest portal HTTPS port" Target="443" Default="8453" Mode="tcp" Description="HTTPS for the guest pages, once a certificate is set up in the admin's HTTPS page (bridge mode only)." Type="Port" Display="always" Required="false" Mask="false">8453</Config>
   <Config Name="Admin port" Target="8081" Default="8091" Mode="tcp" Description="Port for the owner dashboard (bridge mode only). Never expose this to guests." Type="Port" Display="always" Required="true" Mask="false">8091</Config>

@@ -2,7 +2,7 @@
 
 PassGate keeps the list of devices that should be online. A driver pushes
 that list to the router. Drivers only need four operations, so adding one
-for another router (openNDS, pfSense, MikroTik...) is a small job.
+for another router (pfSense, MikroTik...) is a small job.
 """
 import logging
 import re
@@ -168,28 +168,125 @@ class OPNsense(Driver):
         return "Connected. Aliases " + ", ".join(parts) + f"; router sees {len(arp)} devices in its ARP table."
 
 
+class OpenWrt(Driver):
+    """Controls an nftables set on an OpenWrt router (22.03 or newer, fw4).
+
+    PassGate talks to the router's web server (uhttpd's /ubus endpoint, the
+    same one LuCI uses) as a dedicated login that may run exactly one
+    command: /usr/libexec/passgate-gate, a small helper installed by
+    openwrt/setup.sh that adds and removes IPs in the set and prints the ARP
+    table. Firewall rules let IPs in the set out to the internet and send
+    everyone else's web traffic to the portal. See docs/openwrt-setup.md.
+    """
+    name = "openwrt"
+    HELPER = "/usr/libexec/passgate-gate"
+    NO_SESSION = "0" * 32
+    transport = None           # tests plug in a fake router here
+    _sessions: dict = {}       # (url, user, password) -> ubus session id
+    HINTS = {
+        3: "the router doesn't know that call (is rpcd running?)",
+        4: "not found: run openwrt/setup.sh on the router (helper or rpcd file plugin missing)",
+        6: "permission denied: check the user name and password, or run openwrt/setup.sh again",
+        7: "the router took too long to answer",
+    }
+
+    def __init__(self):
+        self.url = (db.get("openwrt_url") or "").rstrip("/") + "/ubus"
+        self.user = db.get("openwrt_user") or "passgate"
+        self.password = db.get("openwrt_password") or ""
+        kw = {"transport": self.transport} if self.transport else {}
+        self.client = httpx.Client(verify=db.get("openwrt_verify_tls") == "1", timeout=10, **kw)
+        self.key = (self.url, self.user, self.password)
+
+    def _call(self, sid, obj, method, args):
+        r = self.client.post(self.url, json={"jsonrpc": "2.0", "id": 1, "method": "call",
+                                             "params": [sid, obj, method, args]})
+        r.raise_for_status()
+        data = r.json()
+        if data.get("error"):
+            return -1, data["error"].get("message", "error")
+        res = data.get("result") or [-1]
+        return res[0], (res[1] if len(res) > 1 else {})
+
+    def _login(self):
+        status, out = self._call(self.NO_SESSION, "session", "login",
+                                 {"username": self.user, "password": self.password, "timeout": 3600})
+        if status != 0:
+            raise RuntimeError("OpenWrt login failed: " + (
+                "wrong user name or password, or setup.sh hasn't been run" if status in (6, -1)
+                else self.HINTS.get(status, f"ubus status {status}")))
+        OpenWrt._sessions[self.key] = out["ubus_rpc_session"]
+        return out["ubus_rpc_session"]
+
+    def _run(self, *args) -> str:
+        for attempt in (0, 1):
+            sid = OpenWrt._sessions.get(self.key) if attempt == 0 else None
+            sid = sid or self._login()
+            status, out = self._call(sid, "file", "exec", {"command": self.HELPER, "params": list(args)})
+            if status in (-1, 6) and attempt == 0:
+                OpenWrt._sessions.pop(self.key, None)   # session expired (router rebooted?): log in again
+                continue
+            if status != 0:
+                raise RuntimeError("OpenWrt: " + self.HINTS.get(status, f"ubus status {status}") +
+                                   (f" ({out})" if isinstance(out, str) else ""))
+            if out.get("code", 0) != 0:
+                raise RuntimeError(f"passgate-gate {args[0]} failed: {(out.get('stderr') or '').strip()}")
+            return out.get("stdout") or ""
+        raise RuntimeError("OpenWrt: not allowed")
+
+    def list_allowed(self, alias):
+        m = re.search(r"elements\s*=\s*\{([^}]*)\}", self._run("list", alias))
+        return set(re.findall(r"\d{1,3}(?:\.\d{1,3}){3}", m.group(1))) if m else set()
+
+    def allow(self, alias, ip):
+        self._run("allow", alias, ip)
+
+    def revoke(self, alias, ip, kill_states=True):
+        self._run("revoke", alias, ip, *(["kill"] if kill_states else []))
+
+    def arp_table(self):
+        return parse_proc_arp(self._run("arp"))
+
+    def test(self):
+        version = self._run("version").strip()
+        parts = []
+        for alias in [base_alias()] + [a for _, a in speed_tiers()]:
+            try:
+                parts.append(f"'{alias}': {len(self.list_allowed(alias))} entries")
+            except Exception as e:
+                parts.append(f"'{alias}': FAILED ({e})")
+        arp = self.arp_table()
+        return (f"Connected ({version}). Sets " + ", ".join(parts) +
+                f"; router sees {len(arp)} devices in its ARP table.")
+
+
+DRIVERS = {"opnsense": OPNsense, "openwrt": OpenWrt}
+
+
 def get_driver() -> Driver:
-    if db.get("gateway_driver") == "opnsense":
-        return OPNsense()
-    return DryRun()
+    return DRIVERS.get(db.get("gateway_driver"), DryRun)()
+
+
+def parse_proc_arp(text: str) -> dict[str, str]:
+    """{ip: mac} from the text of /proc/net/arp, skipping incomplete entries."""
+    out = {}
+    for line in text.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 4 and parts[2] != "0x0":
+            mac = norm_mac(parts[3])
+            if MAC_RE.match(mac) and mac != "00:00:00:00:00:00":
+                out[parts[0]] = mac
+    return out
 
 
 def local_arp() -> dict[str, str]:
     """If the portal sits on the guest network itself, the container's own
     ARP cache already knows each guest's MAC. Fast and needs no API call."""
-    out = {}
     try:
         with open("/proc/net/arp") as f:
-            next(f)
-            for line in f:
-                parts = line.split()
-                if len(parts) >= 4 and parts[2] != "0x0":
-                    mac = norm_mac(parts[3])
-                    if MAC_RE.match(mac) and mac != "00:00:00:00:00:00":
-                        out[parts[0]] = mac
+            return parse_proc_arp(f.read())
     except Exception:
-        pass
-    return out
+        return {}
 
 
 def mac_for_ip(ip: str) -> str | None:

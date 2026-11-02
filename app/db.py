@@ -186,18 +186,22 @@ DEFAULTS = {
     "admin_allowed_cidrs": "",        # blank = any address outside guest_subnet
     "stripe_secret_key": "",
     "stripe_webhook_secret": "",
-    "gateway_driver": "dryrun",       # dryrun | opnsense
+    "gateway_driver": "dryrun",       # dryrun | opnsense | openwrt
     "opnsense_url": "https://10.51.0.1",
     "opnsense_key": "",
     "opnsense_secret": "",
     "opnsense_alias": "paid_clients",
     "opnsense_verify_tls": "0",
+    "openwrt_url": "http://192.168.1.1",
+    "openwrt_user": "passgate",
+    "openwrt_password": "",
+    "openwrt_verify_tls": "0",
     "checkout_grace_minutes": "15",   # temporary internet while the guest is on the Stripe page
     "checkout_grants_per_day": "4",
     "subscription_grace_hours": "24", # keep access this long after a renewal is due
     "swap_cooldown_minutes": "60",    # 0 = guests can swap devices any time
     "guest_manual_mac": "1",          # guests may type in a MAC for a TV/console
-    "speed_tiers": "",                # one per line: Name = opnsense_alias  (blank = off)
+    "speed_tiers": "",                # one per line: Name = alias/set name  (blank = off)
     "support_text": "",
     "setup_complete": "0",
     "admin_pw_hash": "",

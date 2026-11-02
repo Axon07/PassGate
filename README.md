@@ -14,9 +14,10 @@ A captive portal for campgrounds, lakes, cabins, RV parks, marinas, and anywhere
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)
 [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Faxon07%2Fpassgate-2496ED?logo=docker&logoColor=white)](https://github.com/Axon07/Passgate/pkgs/container/passgate)
 ![Stripe](https://img.shields.io/badge/payments-Stripe-635BFF?logo=stripe&logoColor=white)
-![OPNsense](https://img.shields.io/badge/firewall-OPNsense-D94F00?logo=opnsense&logoColor=white)
+![OPNsense](https://img.shields.io/badge/router-OPNsense-D94F00?logo=opnsense&logoColor=white)
+![OpenWrt](https://img.shields.io/badge/router-OpenWrt-00B5E2?logo=openwrt&logoColor=white)
 
-[Features](#-features) · [How it works](#-how-it-works) · [Quick start](#-quick-start) · [Network guide](docs/opnsense-setup.md) · [FAQ](#-faq)
+[Features](#-features) · [How it works](#-how-it-works) · [Quick start](#-quick-start) · [OPNsense guide](docs/opnsense-setup.md) · [OpenWrt guide](docs/openwrt-setup.md) · [FAQ](#-faq)
 
 <br>
 
@@ -28,7 +29,7 @@ A captive portal for campgrounds, lakes, cabins, RV parks, marinas, and anywhere
 
 ---
 
-Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weekend or monthly pass**, pay by card, and they're online. **No vouchers to hand out and nobody has to be on site.** Money goes straight to your Stripe account with no platform fee, and everything runs in one small Docker container next to your firewall.
+Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weekend or monthly pass**, pay by card, and they're online. **No vouchers to hand out and nobody has to be on site.** Money goes straight to your Stripe account with no platform fee, and everything runs in one small Docker container next to your **OPNsense** or **OpenWrt** router.
 
 ## ✨ Features
 
@@ -72,6 +73,7 @@ Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weeken
 ### 🧱 Built for the middle of nowhere
 - **Works behind any ISP, CGNAT included:** no port forwarding or webhooks needed
 - **Fails closed:** if the server is off, guests get nothing (not free internet)
+- **Open-source routers:** OPNsense or OpenWrt does the blocking
 - **Any access points:** UniFi, TP-Link, OpenWrt, HaLow bridges and others
 - One Python process + SQLite. Upgrades migrate the database on start
 - **Built-in HTTPS:** free Let's Encrypt certificates via DNS challenge (Cloudflare and 150+ providers), renewed automatically, even behind CGNAT
@@ -86,16 +88,16 @@ Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weeken
 ```mermaid
 flowchart LR
     P["📱 Guest phone"] -- open SSID --> AP["Access points<br/>(any brand)"]
-    AP -- guest VLAN --> FW["OPNsense"]
+    AP -- guest VLAN --> FW["Router<br/>(OPNsense or OpenWrt)"]
     FW -- internet --> NET(("🌐 ISP"))
     FW -. "unpaid web traffic<br/>redirected" .-> PG["PassGate<br/>(Docker)"]
     PG -- "API: let this device through" --> FW
     PG -- "checkout & status" --> ST["💳 Stripe"]
 ```
 
-1. A new phone joins the open network. OPNsense blocks it and sends its web traffic to PassGate, so the **"Sign in to network"** sheet pops up.
+1. A new phone joins the open network. The router blocks it and sends its web traffic to PassGate, so the **"Sign in to network"** sheet pops up.
 2. The guest picks a plan and makes an account. PassGate opens the gate for a few minutes so the phone can reach **Stripe Checkout**.
-3. Payment succeeds, and PassGate adds the device to an OPNsense alias. **The guest is online.**
+3. Payment succeeds, and PassGate adds the device to the router's allow-list. **The guest is online.**
 4. Every 30 seconds PassGate re-syncs the allow-list. It follows devices when their IP changes, removes expired passes, and rebuilds the list after a router reboot. Every 5 minutes it asks Stripe about renewals, cancellations and checkouts that never came back.
 
 PassGate only decides **who** gets through; the firewall enforces it. Guest traffic never passes through the container.
@@ -123,18 +125,20 @@ PassGate only decides **who** gets through; the firewall enforces it. Guest traf
 
 **For real:**
 
-1. **Set up the network.** Follow the **[network guide](docs/opnsense-setup.md)**: guest VLAN, alias, firewall and NAT rules, API key, and a DNS name for the portal.
-2. **Run the container** on any Docker host attached to the small services network (VLAN 51) behind OPNsense. Set `parent` in `docker-compose.yml` to that host's VLAN 51 interface (e.g. `eth0.51`), then:
+1. **Set up the network** with the guide for your router:
+   - **[OPNsense guide](docs/opnsense-setup.md)**: guest VLAN, alias, firewall and NAT rules, API key, and a DNS name for the portal.
+   - **[OpenWrt guide](docs/openwrt-setup.md)**: a guest network, then one script on the router does the firewall side.
+2. **Run the container** with its own IP on a network behind the router, not on the guest network. Both guides have plain Docker, Proxmox and Unraid examples. With OPNsense's services VLAN, set `parent` in `docker-compose.yml` to the host's VLAN 51 interface (e.g. `eth0.51`), then:
 
    ```bash
    mkdir passgate && cd passgate && curl -fsSLO https://raw.githubusercontent.com/Axon07/Passgate/main/docker-compose.yml && docker compose up -d
    ```
 
-   The image (`ghcr.io/axon07/passgate`) is built for amd64 and arm64, so it runs on a Raspberry Pi too. **Unraid** users can add it from a template (see below). Plain Docker and Proxmox examples are in the [network guide](docs/opnsense-setup.md#1-hardware-where-opnsense-and-passgate-run).
+   The image (`ghcr.io/axon07/passgate`) is built for amd64 and arm64, so it runs on a Raspberry Pi too. **Unraid** users can add it from a template (see below). Plain Docker and Proxmox examples are in the guides.
 
-3. **Open the admin page** at `http://<OPNsense WAN IP>:8081/setup`. Set your network name, portal address and admin password.
+3. **Open the admin page** on port 8081 (`/setup`; the guide shows the address). Set your network name, portal address and admin password.
 4. **Set your prices** under *Plans & prices*. Three starter plans are created for you.
-5. In **Settings**, add your Stripe key and OPNsense API details, switch *Router* to OPNsense, and press **Test**.
+5. In **Settings**, add your Stripe key, choose your *Router* and fill in its connection details, then press **Test**.
 6. Buy a pass on your phone with Stripe's test card `4242 4242 4242 4242`. When it works, swap in your live key. 🎉
 
 <details>
@@ -146,7 +150,7 @@ Until PassGate is listed in Community Applications, add its template by hand. In
 wget -qO /boot/config/plugins/dockerMan/templates-user/my-PassGate.xml https://raw.githubusercontent.com/Axon07/Passgate/main/unraid/passgate.xml
 ```
 
-then **Docker → Add Container → Template: PassGate**. The defaults run in bridge mode for trying it out. For real use, set **Network Type** to your services VLAN (e.g. `br0.51`) and a **Fixed IP** (e.g. `10.51.0.2`).
+then **Docker → Add Container → Template: PassGate**. The defaults run in bridge mode for trying it out. For real use, give it its own address: **Network Type** `br0.51` and **Fixed IP** `10.51.0.2` for the OPNsense layout, or `Custom: br0` and a free lan IP (e.g. `192.168.1.20`) for OpenWrt.
 </details>
 
 **Updating:** pull the new image and recreate the container (`docker compose pull && docker compose up -d`, or *Check for updates* in Unraid). Your data stays in the data folder, and the database upgrades itself on start.
@@ -167,7 +171,7 @@ then **Docker → Add Container → Template: PassGate**. The defaults run in br
 <details>
 <summary><b>📱 Devices, limits and swapping</b></summary>
 
-**How a device joins an account.** Guests never type a MAC. When a page is opened, PassGate asks OPNsense's ARP table which MAC is using that IP. The phone that pays becomes device 1, and logging in on another device adds it. OPNsense filters by IP, and every 30 seconds PassGate maps each registered MAC to its current IP.
+**How a device joins an account.** Guests never type a MAC. When a page is opened, PassGate asks the router's ARP table which MAC is using that IP. The phone that pays becomes device 1, and logging in on another device adds it. The router filters by IP, and every 30 seconds PassGate maps each registered MAC to its current IP.
 
 **Device limit** = devices included + extra slots bought. Included devices come from the best active pass, or from a custom limit you set on the guest's admin page. A custom limit of 5 plus one bought slot means 6 devices.
 
@@ -226,7 +230,7 @@ Admin → **HTTPS** → *Free certificate from Let's Encrypt*: enter a name in a
 
 Admin → *Promotions*. Set a start and end time, a headline and a message (for example *"Free Wi-Fi this long weekend! Like it? The monthly plan is $25"*). During the promotion the sign-in page shows a **Connect free** button: one tap, no account or card, online until the promotion ends. Paid plans are shown right underneath, and paying guests aren't affected.
 
-When it ends (or you press *End it now*), free devices go back to the sign-in page, which shows them your thank-you note for a set number of days. Setting new dates starts a fresh promotion. Consider a per-device speed cap in OPNsense before a busy free weekend.
+When it ends (or you press *End it now*), free devices go back to the sign-in page, which shows them your thank-you note for a set number of days. Setting new dates starts a fresh promotion. Consider a per-device speed cap on your router before a busy free weekend.
 
 </details>
 
@@ -235,8 +239,8 @@ When it ends (or you press *End it now*), free devices go back to the sign-in pa
 
 Speeds are enforced by the router. PassGate can't do it because guest traffic never passes through it.
 
-- **One cap for everyone:** no PassGate setup needed. Add a shaper pipe with a per-IP mask in OPNsense ([guide](docs/opnsense-setup.md#8-speed-limits-optional-recommended)).
-- **Different speeds per plan:** in Settings → *Speed tiers*, list tiers as `Name = alias` (e.g. `Basic = paid_basic`, `Premium = paid_premium`) and pick a tier on each plan. PassGate puts each paid device in the main alias (internet on/off) **and** its tier alias, which your shaper rules match. Limits are per device.
+- **One cap for everyone:** no PassGate setup needed. OPNsense: a shaper pipe with a per-IP mask ([guide](docs/opnsense-setup.md#8-speed-limits-optional-recommended)). OpenWrt: the nft-qos package ([guide](docs/openwrt-setup.md#7-speed-limits)).
+- **Different speeds per plan** (OPNsense): in Settings → *Speed tiers*, list tiers as `Name = alias` (e.g. `Basic = paid_basic`, `Premium = paid_premium`) and pick a tier on each plan. PassGate puts each paid device in the main alias (internet on/off) **and** its tier alias, which your shaper rules match. Limits are per device.
 
 </details>
 
@@ -247,7 +251,7 @@ Speeds are enforced by the router. PassGate can't do it because guest traffic ne
 |------|------|---------------------|
 | `80` | Guest portal over HTTP (captive detection, then redirect to HTTPS when it's on), `/stripe/webhook`, `/api/captive` | guests |
 | `443` | Guest portal over HTTPS, once a certificate is set up | guests |
-| `8081` | Admin dashboard | only you, via the OPNsense WAN port-forward. It refuses the guest subnet. |
+| `8081` | Admin dashboard | only you: from your lan (OpenWrt layout) or through the OPNsense WAN port-forward. It refuses the guest subnet. |
 
 - **Data** lives in `/data/passgate.db` (SQLite). Back up that folder.
 - **Payment window:** unpaid devices get a few minutes of internet (default 15) to reach Stripe's page, limited to a few tries per device per day.
@@ -282,9 +286,9 @@ Usually not inside the pop-up sign-in sheet on phones, which is a limitation of 
 </details>
 
 <details>
-<summary><b>What about pfSense, MikroTik or OpenWrt as the firewall?</b></summary>
+<summary><b>Which routers work? What about pfSense or MikroTik?</b></summary>
 
-PassGate ships with an OPNsense driver. Router support lives in [`app/gateway.py`](app/gateway.py): a driver needs list / allow / revoke on an allow-list, plus an IP→MAC lookup. Pull requests for more drivers are very welcome.
+PassGate controls **OPNsense** (through its API) and **OpenWrt 22.03+** (through a small helper that a setup script installs). Both are open source and run on cheap hardware. Router support lives in [`app/gateway.py`](app/gateway.py): a driver needs list / allow / revoke on an allow-list, plus an IP→MAC lookup. Pull requests for more drivers, such as pfSense or MikroTik, are very welcome.
 </details>
 
 <details>
@@ -299,7 +303,7 @@ That depends on your internet plan and where you are. Check that your provider's
 pip install -r requirements.txt pytest && pytest -q
 ```
 
-The test suite runs the full guest and owner flows against a fake Stripe and a dry-run router.
+The test suite runs the full guest and owner flows against a fake Stripe and a dry-run router, and the OpenWrt driver against a fake router.
 
 | File | What it does |
 |---|---|
@@ -308,7 +312,8 @@ The test suite runs the full guest and owner flows against a fake Stripe and a d
 | `app/billing.py` | Stripe checkout, fulfilment, subscription sync |
 | `app/extras.py` | Extra device slot pricing, discounts, proration |
 | `app/access.py` | Who's allowed online, devices, invites, the sync loop |
-| `app/gateway.py` | Router drivers (OPNsense, dry-run) |
+| `app/gateway.py` | Router drivers (OPNsense, OpenWrt, dry-run) |
+| `openwrt/setup.sh` | Router-side setup for OpenWrt: firewall set, rules, restricted login |
 | `app/db.py` | SQLite schema, settings, migrations |
 
 ## 🤝 Contributing

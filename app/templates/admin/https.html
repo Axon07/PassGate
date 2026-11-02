@@ -28,8 +28,8 @@
     <div id="m-common">
       <label class="f">Portal domain name</label>
       <input type="text" name="tls_domain" value="{{ s.tls_domain }}" placeholder="wifi.example.com">
-      <div class="help">A name in a domain you own. In OPNsense, add a DNS host override pointing it at PassGate
-        (e.g. 10.51.0.2) and allow guests to reach port 443. See the network guide.</div>
+      <div class="help">A name in a domain you own. On your router, point it at PassGate with a local DNS
+        record (OPNsense: Unbound host override; OpenWrt: setup.sh's PORTAL_HOST) and let guests reach port 443. See the network guide.</div>
     </div>
 
     <div id="m-le">

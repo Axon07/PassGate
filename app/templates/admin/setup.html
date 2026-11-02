@@ -20,7 +20,7 @@
     <div class="help">Monthly subscriptions stop billing automatically after this date.</div>
     <label class="f">Portal address</label>
     <input type="text" name="portal_url" value="{{ s.portal_url }}" placeholder="http://wifi.lake.lan">
-    <div class="help">The address guests are redirected to. Set a matching DNS override in OPNsense (see the docs).</div>
+    <div class="help">The address guests are redirected to. Point that name at PassGate in your router's DNS (see the network guide).</div>
     <label class="f">Guest network</label>
     <input type="text" name="guest_subnet" value="{{ s.guest_subnet }}">
     <label class="f">Stripe secret key (optional now)</label>

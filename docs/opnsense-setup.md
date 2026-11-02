@@ -1,5 +1,7 @@
 # Network setup: OPNsense + Docker + any access points
 
+> Using an OpenWrt router instead? See the **[OpenWrt guide](openwrt-setup.md)**.
+
 This is the reference layout. Addresses are examples, so change them to suit you, but keep the three
 networks separate.
 

@@ -31,20 +31,26 @@ SETTING_FIELDS = [
     ("admin_allowed_cidrs", "Admin allowed from", "text", "Optional, comma-separated, e.g. 192.168.1.0/24"),
     ("stripe_secret_key", "Stripe secret key", "secret", "sk_live_… or sk_test_… (a restricted key works too)"),
     ("stripe_webhook_secret", "Stripe webhook secret", "secret", "Optional. Only if Stripe can reach this portal."),
-    ("gateway_driver", "Router", "select:dryrun=Dry run (control nothing)|opnsense=OPNsense", ""),
+    ("gateway_driver", "Router", "select:dryrun=Dry run (control nothing)|opnsense=OPNsense|openwrt=OpenWrt",
+     "Dry run lets you try PassGate without touching any router."),
+    ("opnsense_alias", "Allow-list name", "text",
+     "The list PassGate fills with paid guests: the OPNsense alias or OpenWrt set, e.g. paid_clients"),
     ("opnsense_url", "OPNsense address", "text", "e.g. https://10.51.0.1"),
     ("opnsense_key", "OPNsense API key", "secret", ""),
     ("opnsense_secret", "OPNsense API secret", "secret", ""),
-    ("opnsense_alias", "OPNsense alias name", "text", "External (advanced) alias, e.g. paid_clients"),
     ("opnsense_verify_tls", "Verify OPNsense certificate", "select:0=No (self-signed)|1=Yes", ""),
+    ("openwrt_url", "OpenWrt address", "text", "The router as PassGate reaches it, e.g. http://192.168.1.1"),
+    ("openwrt_user", "OpenWrt user", "text", "Created by setup.sh (default passgate). Not root."),
+    ("openwrt_password", "OpenWrt password", "secret", "The PASSWORD you gave setup.sh"),
+    ("openwrt_verify_tls", "Verify OpenWrt certificate", "select:0=No (self-signed or http)|1=Yes", ""),
     ("swap_cooldown_minutes", "Device swap cooldown (minutes)", "number",
      "After a guest removes or swaps a device, how long before they can swap again. 0 = off. "
      "Stops people sharing one login by swapping back and forth."),
     ("guest_manual_mac", "Guests can add devices by MAC", "select:1=Yes (for TVs and consoles)|0=No (owner only)",
      "A typed-in MAC can't be moved off another account, but MACs can be copied — see the README."),
     ("speed_tiers", "Speed tiers (optional)", "textarea",
-     "One per line, Name = OPNsense alias, slowest first. Example:\nBasic = paid_basic\nPremium = paid_premium\n"
-     "Then pick a tier on each plan and add shaper rules in OPNsense. Leave blank if you don't use tiers."),
+     "One per line, Name = alias (OPNsense) or set (OpenWrt), slowest first. Example:\nBasic = paid_basic\nPremium = paid_premium\n"
+     "Then pick a tier on each plan and add the speed rules on your router. Leave blank if you don't use tiers."),
     ("checkout_grace_minutes", "Minutes of internet while paying", "number",
      "Guests need to reach Stripe's page before they've paid."),
     ("checkout_grants_per_day", "Checkout attempts per device per day", "number", ""),
@@ -182,7 +188,7 @@ def dashboard(request: Request):
         warnings.append("Stripe isn't connected yet — guests can't pay. Add your key in Settings.")
     if db.get("gateway_driver") == "dryrun":
         warnings.append("Router is in dry-run mode — payments work but nobody is actually let online. "
-                        "Switch to OPNsense in Settings when your firewall is ready.")
+                        "Choose your router in Settings when your firewall is ready.")
     if promo.active():
         warnings.append(f"A free-access promotion is running until {fmt_ts(promo.active()[1])} "
                         f"({len(promo.devices())} devices connected free). Manage it under Promotions.")

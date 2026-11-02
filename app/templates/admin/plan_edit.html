@@ -89,7 +89,7 @@
       <option value="">No tier (default speed)</option>
       {% for name, alias in tiers %}<option value="{{ name }}" {{ 'selected' if p and p.speed_tier == name }}>{{ name }} ({{ alias }})</option>{% endfor %}
     </select>
-    <div class="help">Changes apply to new purchases. Set the actual speeds in OPNsense's traffic shaper.</div>
+    <div class="help">Changes apply to new purchases. Set the actual speeds in your router's traffic shaper.</div>
     {% elif p and p.speed_tier %}<input type="hidden" name="speed_tier" value="{{ p.speed_tier }}">{% endif %}
     <div class="row" style="margin-top:10px">
       <div><label class="f">Display order</label><input type="number" name="sort" value="{{ p.sort if p else 0 }}"></div>

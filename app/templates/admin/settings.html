@@ -6,6 +6,8 @@
   <form method="post" action="/settings">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     {% for key, label, kind, help in fields %}
+      {% set drv = key.split('_')[0] if key.split('_')[0] in ('opnsense', 'openwrt') and key != 'opnsense_alias' else '' %}
+      <div{% if drv %} data-router="{{ drv }}"{% endif %}>
       <label class="f" for="{{ key }}">{{ label }}</label>
       {% if kind == 'textarea' %}
         <textarea id="{{ key }}" name="{{ key }}">{{ s[key] }}</textarea>
@@ -25,6 +27,7 @@
         <input id="{{ key }}" type="{{ kind }}" name="{{ key }}" value="{{ s[key] }}">
       {% endif %}
       {% if help %}<div class="help">{{ help }}</div>{% endif %}
+      </div>
     {% endfor %}
     <label class="f">New admin password</label>
     <input type="password" name="new_admin_password" autocomplete="new-password" placeholder="leave blank to keep">
@@ -33,4 +36,16 @@
   <form method="post" action="/settings/test"><input type="hidden" name="csrf" value="{{ csrf }}">
     <button class="ghost full">Test Stripe &amp; router connection</button></form>
 </div>
+<script>
+// Only show the connection fields for the router that's selected.
+(function () {
+  var sel = document.getElementById('gateway_driver');
+  function show() {
+    [].forEach.call(document.querySelectorAll('[data-router]'), function (el) {
+      el.style.display = el.getAttribute('data-router') === sel.value ? '' : 'none';
+    });
+  }
+  sel.addEventListener('change', show); show();
+})();
+</script>
 {% endblock %}

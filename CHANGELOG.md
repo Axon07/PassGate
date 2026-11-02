@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**New**
+- **OpenWrt support.** PassGate can now control an OpenWrt router (22.03 or newer) as well as OPNsense. One script on the router (`openwrt/setup.sh`) adds the allow-list, firewall rules and a login that can only change that list. Choose *Router: OpenWrt* in Settings. Guide: `docs/openwrt-setup.md`.
+- Settings only show the connection fields for the router you picked.
+
 ## v0.2.0
 
 **New**
