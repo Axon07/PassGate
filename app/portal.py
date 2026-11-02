@@ -10,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import access, billing, db
 from . import extras as xs
+from . import promo
 from .templating import STATIC_DIR, render
 from .gateway import valid_mac
 from .util import check_pw, hash_pw
@@ -76,7 +77,31 @@ def home(request: Request, msg: str = "", err: str = ""):
         request.session["uid"] = device_owner
         return RedirectResponse("/account", status_code=303)
     return render("home.html", request=request, plans=plans(), msg=msg, err=err,
-                  device_known=bool(mac), xs=xs)
+                  device_known=bool(mac), xs=xs, **promo_ctx(mac))
+
+
+def promo_ctx(mac):
+    """What the sign-in page should say about a free-access promotion."""
+    act = promo.active()
+    return {"promo_on": bool(act), "promo_until": act[1] if act else None,
+            "promo_mine": promo.claimed(mac) if act else False,
+            "promo_thanks": promo.show_thanks(mac),
+            "promo_title": promo.get("promo_title"), "promo_text": promo.get("promo_text"),
+            "promo_after_text": promo.get("promo_after_text")}
+
+
+@app.post("/free")
+def free(request: Request):
+    """One tap during a promotion: this device is online until it ends."""
+    ip = client_ip(request)
+    mac = access.identify(ip)[0]
+    if not mac:
+        return RedirectResponse("/?err=Couldn%27t+identify+this+device.+Reconnect+to+the+Wi-Fi+and+try+again.",
+                                status_code=303)
+    if not promo.claim(mac, ip):
+        return RedirectResponse("/?err=The+free+access+period+has+ended.", status_code=303)
+    access.sync()
+    return RedirectResponse("/?msg=free", status_code=303)
 
 
 def _joined_page(owner_id, dev, fresh=False):

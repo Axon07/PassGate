@@ -636,3 +636,54 @@ def test_27_admin_plan_extras_form():
         "csrf": csrf(page), "name": "Day Pass", "price": "12.50", "max_devices": "2", "kind": "one_time",
         "duration_mode": "hours", "duration_value": "1", "duration_unit": "days", "active": "on", "sort": "1"})
     assert db.one("SELECT extra_device_cents FROM plans WHERE id=?", (wk["id"],))["extra_device_cents"] == 0
+
+
+# ---- free-access promotion -------------------------------------------------------
+
+def _local(offset_s):
+    from datetime import datetime
+    from app.util import tz
+    return datetime.fromtimestamp(time.time() + offset_s, tz()).strftime("%Y-%m-%dT%H:%M")
+
+
+def test_28_free_promotion():
+    adm = _admin()
+    page = adm.get("/promo")
+    assert page.status_code == 200 and "Free-access promotion" in page.text
+    c = guest("10.50.8.1", "80:00:00:00:00:01")
+    # off: no free button, and claiming is refused
+    assert "Connect free" not in c.get("/").text
+    assert "ended" in c.post("/free").headers["location"]
+    adm.post("/promo", data={"csrf": csrf(page), "promo_enabled": "on", "promo_start": _local(-3600),
+                             "promo_end": _local(2 * 3600), "promo_title": "Long weekend on us!",
+                             "promo_text": "Enjoy. Like it? Grab the monthly.", "promo_after_text": "Hope you enjoyed it!",
+                             "promo_after_days": "14"})
+    home = c.get("/")
+    assert "Long weekend on us!" in home.text and "Connect free until" in home.text and "Monthly" in home.text
+    assert "Running now" in adm.get("/promo").text
+    r = c.post("/free")
+    assert r.headers["location"] == "/?msg=free"
+    assert "10.50.8.1" in allowed()
+    assert "You're connected" in c.get("/").text.replace("&#39;", "'")
+    assert "promotion is running" in adm.get("/").text
+    # the guest can still buy a plan during the promotion
+    assert "Continue to payment" in c.get("/").text
+    # end it early: device loses access, then sees the thank-you note and plans
+    page = adm.get("/promo")
+    adm.post("/promo", data={"csrf": csrf(page), "action": "end"})
+    assert "10.50.8.1" not in allowed()
+    home = c.get("/")
+    assert "Hope you enjoyed it!" in home.text and "Connect free" not in home.text
+    # another device that never used it doesn't see the note
+    assert "Hope you enjoyed it!" not in guest("10.50.8.2", "80:00:00:00:00:02").get("/").text
+    # new dates start a fresh list
+    page = adm.get("/promo")
+    adm.post("/promo", data={"csrf": csrf(page), "promo_enabled": "on", "promo_start": _local(86400),
+                             "promo_end": _local(3 * 86400)})
+    assert db.one("SELECT COUNT(*) n FROM promo_devices")["n"] == 0
+    assert "Scheduled" in adm.get("/promo").text
+    # bad dates are flagged
+    page = adm.get("/promo")
+    r = adm.post("/promo", data={"csrf": csrf(page), "promo_enabled": "on", "promo_start": _local(7200),
+                                 "promo_end": _local(3600)})
+    assert "won%27t+run" in r.headers["location"] or "won't" in r.headers["location"]

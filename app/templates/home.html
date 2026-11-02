@@ -1,8 +1,24 @@
 {% extends "base.html" %}
 {% block body %}
-<p class="lead">{{ welcome_text }}</p>
+{% if promo_on %}
+<div class="card promo">
+  <h2>{{ promo_title }}</h2>
+  {% if promo_mine %}
+    <p style="margin:0 0 4px"><span class="dot on"></span> <strong>You're connected</strong> until {{ fmt_ts(promo_until) }}.</p>
+    <p class="muted" style="margin:0">{{ promo_text }}</p>
+  {% else %}
+    <p class="muted" style="margin:0 0 12px">{{ promo_text }}</p>
+    <form method="post" action="/free"><button class="full" style="margin-top:0">Connect free until {{ fmt_ts(promo_until) }}</button></form>
+    <p class="help" style="text-align:center;margin-bottom:0">No account or card needed.</p>
+  {% endif %}
+</div>
+{% elif promo_thanks %}
+<div class="note ok">{{ promo_after_text }}</div>
+{% endif %}
+{% if not promo_on %}<p class="lead">{{ welcome_text }}</p>{% endif %}
 {% if err %}<div class="note err">{{ err }}</div>{% endif %}
-{% if msg %}<div class="note ok">{{ msg }}</div>{% endif %}
+{% if msg and msg != 'free' %}<div class="note ok">{{ msg }}</div>{% endif %}
+{% if promo_on %}<h2 style="font-size:1.05rem;margin:22px 0 10px">{{ 'Keep it going after the free period' if promo_mine else 'Or get your own pass' }}</h2>{% endif %}
 
 {% if plans %}
 <form method="post" action="/start">

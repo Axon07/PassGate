@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Free-access promotions: scheduled free period with a one-tap "Connect free" button, custom message, and a thank-you note with the paid plans afterwards
+
 ## v0.1.0 — first public release
 
 PassGate is a self-hosted captive portal that sells Wi-Fi access through Stripe.

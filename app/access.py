@@ -282,6 +282,12 @@ def wanted() -> dict[str, set[str]]:
             out[base].add(ip)
     for g in db.q("SELECT * FROM temp_grants WHERE expires_at>?", (t,)):
         out[base].add(mac_to_ip.get(g["mac"], g["ip"]))
+    from . import promo
+    if promo.active():  # free-access promotion: everyone who tapped "Connect free"
+        for p in promo.devices():
+            ip = ip_for(p["mac"], p["ip"] if not arp else None)
+            if ip:
+                out[base].add(ip)
     return out
 
 

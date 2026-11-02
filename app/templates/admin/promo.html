@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+{% set page = 'promo' %}
+{% block body %}
+<div class="card" style="max-width:720px">
+  <h2>Free-access promotion</h2>
+  <p class="muted" style="margin-top:-4px">Let anyone use the Wi-Fi free for a while, like a long weekend, so people can try it.
+    The sign-in page shows your message and a one-tap <em>Connect free</em> button: no account, no card. Paid plans are
+    shown underneath. When it ends, free devices go back to the sign-in page.</p>
+  <p>Status:
+    {% if status == 'active' %}<span class="pill" style="background:var(--ok-bg);color:var(--ok)">Running now</span>
+      until {{ fmt_ts(window[1]) }} · {{ devices|length }} device{{ 's' if devices|length != 1 }} connected free
+    {% elif status == 'scheduled' %}<span class="pill">Scheduled</span> starts {{ fmt_ts(window[0]) }}
+    {% elif status == 'ended' %}<span class="pill">Ended</span> {{ fmt_ts(window[1]) }} · {{ devices|length }} devices used it
+    {% elif status == 'invalid' %}<span class="pill" style="color:var(--err)">Check the dates</span>
+    {% else %}<span class="pill">Off</span>{% endif %}</p>
+
+  <form method="post" action="/promo">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label style="display:flex;gap:8px;margin:6px 0 4px"><input type="checkbox" name="promo_enabled" {{ 'checked' if s.promo_enabled == '1' }}>
+      <strong>Promotion on</strong></label>
+    <div class="row">
+      <div><label class="f">Starts</label><input type="datetime-local" name="promo_start" value="{{ s.promo_start }}"></div>
+      <div><label class="f">Ends</label><input type="datetime-local" name="promo_end" value="{{ s.promo_end }}"></div>
+    </div>
+    <div class="help">In your time zone (Settings). Setting new dates starts a fresh list of free devices.</div>
+    <label class="f">Headline</label>
+    <input type="text" name="promo_title" value="{{ s.promo_title }}" maxlength="80">
+    <label class="f">Message on the sign-in page</label>
+    <textarea name="promo_text" maxlength="500">{{ s.promo_text }}</textarea>
+    <label class="f">Thank-you note after it ends</label>
+    <textarea name="promo_after_text" maxlength="500">{{ s.promo_after_text }}</textarea>
+    <div class="row">
+      <div><label class="f">Show the thank-you note for (days)</label>
+        <input type="number" name="promo_after_days" min="0" max="90" value="{{ s.promo_after_days }}"></div>
+      <div></div>
+    </div>
+    <div class="help">Only devices that connected free see the thank-you note.</div>
+    <div class="row" style="margin-top:14px">
+      <button>Save</button>
+      {% if status == 'active' %}<button class="danger" name="action" value="end"
+        onclick="return confirm('End the free period now?')">End it now</button>{% endif %}
+    </div>
+  </form>
+</div>
+<div class="card" style="max-width:720px">
+  <h2>Tips</h2>
+  <ul class="muted" style="margin:0;padding-left:18px">
+    <li>Set a per-device speed cap in OPNsense before a busy free weekend so a few people can't fill the connection.</li>
+    <li>Paying guests aren't affected. Their passes keep running as normal.</li>
+    <li>Mention the monthly plan in the message: people who try it are your best subscribers.</li>
+  </ul>
+</div>
+{% endblock %}

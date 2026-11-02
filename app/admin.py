@@ -7,10 +7,12 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import access, billing, db
+from datetime import datetime
+
+from . import access, billing, db, promo
 from .gateway import get_driver, speed_tiers, valid_mac
 from .templating import STATIC_DIR, TIMEZONES, render
-from .util import check_pw, hash_pw, ip_in
+from .util import check_pw, fmt_ts, hash_pw, ip_in, tz
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -181,6 +183,9 @@ def dashboard(request: Request):
     if db.get("gateway_driver") == "dryrun":
         warnings.append("Router is in dry-run mode — payments work but nobody is actually let online. "
                         "Switch to OPNsense in Settings when your firewall is ready.")
+    if promo.active():
+        warnings.append(f"A free-access promotion is running until {fmt_ts(promo.active()[1])} "
+                        f"({len(promo.devices())} devices connected free). Manage it under Promotions.")
     if not db.get("portal_url"):
         warnings.append("Set the portal address in Settings so phones get redirected correctly.")
     return render("admin/dashboard.html", request=request, stats=stats, events=events, warnings=warnings,
@@ -457,6 +462,45 @@ async def guest_action(request: Request, uid: int):
                 msg = f"Stripe error: {e}"
     access.sync()
     return RedirectResponse(f"/guests/{uid}?msg=" + msg.replace(" ", "+"), status_code=303)
+
+
+# ---- free-access promotion ------------------------------------------------------
+
+@app.get("/promo", response_class=HTMLResponse)
+def promo_page(request: Request, msg: str = ""):
+    if (r := guard(request)):
+        return r
+    w = promo.window()
+    t = db.now()
+    status = ("off" if db.get("promo_enabled") != "1" else "invalid" if not w
+              else "scheduled" if t < w[0] else "active" if t < w[1] else "ended")
+    s = {k: promo.get(k) for k in promo.SETTINGS}
+    return render("admin/promo.html", request=request, s=s, status=status, window=w, msg=msg,
+                  devices=promo.devices())
+
+
+@app.post("/promo")
+async def promo_save(request: Request):
+    if (r := guard(request)):
+        return r
+    f = await request.form()
+    if not csrf_ok(request, f.get("csrf", "")):
+        return RedirectResponse("/promo", status_code=303)
+    if f.get("action") == "end":
+        db.set("promo_end", datetime.fromtimestamp(db.now() - 60, tz()).strftime("%Y-%m-%dT%H:%M"))
+        msg = "Promotion ended. Free devices go back to the sign-in page within 30 seconds."
+    else:
+        if (f.get("promo_start"), f.get("promo_end")) != (db.get("promo_start"), db.get("promo_end")):
+            promo.reset()  # a new promotion starts with a clean list
+        db.set("promo_enabled", "1" if f.get("promo_enabled") else "0")
+        for k in ("promo_start", "promo_end", "promo_title", "promo_text", "promo_after_text", "promo_after_days"):
+            if k in f:
+                db.set(k, f.get(k, "").strip()[:500])
+        msg = "Saved"
+        if db.get("promo_enabled") == "1" and not promo.window():
+            msg = "Saved, but the end must be after the start, so the promotion won't run."
+    access.sync()
+    return RedirectResponse("/promo?msg=" + msg.replace(" ", "+"), status_code=303)
 
 
 # ---- always-online (bypass) list ---------------------------------------------

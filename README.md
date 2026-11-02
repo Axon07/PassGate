@@ -41,6 +41,7 @@ Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weeken
 - **Passes stack:** a day pass bought on top of a weekend pass adds time
 - **Extra device slots** at checkout or later, **prorated** for the time left
 - **Optional volume discount:** percent or dollar amount off each further slot
+- **Free promotions:** open it up for a long weekend with a one-tap "Connect free" button and your own message, then a thank-you note pointing to the paid plans
 - Refunds and cancellations from your Stripe dashboard are picked up automatically
 
 </td>
@@ -207,6 +208,15 @@ Off by default, and set per plan: *Plans → Edit → Extra device slots*.
 On the account page, *Connect a family member's device* makes a one-time code like `K7P-42Q`, valid for 24 hours. On the other device, the sign-in page has *Have a join code?*
 
 The device takes one of the account's slots and shows *"Connected through pa•••@example.com's pass"*. It **never gets the account itself**: no billing, device list or password. Ten wrong codes in an hour locks that device out for a while. A full account refuses the code with a clear message.
+
+</details>
+
+<details>
+<summary><b>🎉 Free promotions</b></summary>
+
+Admin → *Promotions*. Set a start and end time, a headline and a message (for example *"Free Wi-Fi this long weekend! Like it? The monthly plan is $25"*). During the promotion the sign-in page shows a **Connect free** button: one tap, no account or card, online until the promotion ends. Paid plans are shown right underneath, and paying guests aren't affected.
+
+When it ends (or you press *End it now*), free devices go back to the sign-in page, which shows them your thank-you note for a set number of days. Setting new dates starts a fresh promotion. Consider a per-device speed cap in OPNsense before a busy free weekend.
 
 </details>
 

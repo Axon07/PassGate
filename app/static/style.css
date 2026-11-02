@@ -74,3 +74,5 @@ th { color: var(--muted); font-weight: 600; font-size: .82rem; }
 a { color: var(--accent); }
 code { background: var(--bg); padding: 1px 5px; border-radius: 5px; }
 .pill { font-size: .75rem; padding: 2px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); }
+.card.promo { border: 2px solid var(--accent); background: linear-gradient(180deg, var(--ok-bg), var(--card) 70%); }
+.card.promo h2 { font-size: 1.3rem; }
