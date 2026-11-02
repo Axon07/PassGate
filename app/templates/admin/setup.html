@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% set nav = false %}
+{% block body %}
+<div class="card" style="max-width:640px">
+  <h2>Welcome — let's set up your Wi-Fi portal</h2>
+  <p class="muted">You can change all of this later in Settings. Starter plans (day, weekend, monthly) are created for you to edit.</p>
+  <form method="post" action="/setup">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f">Network name shown to guests</label>
+    <input type="text" name="site_name" value="{{ s.site_name }}" required>
+    <div class="row">
+      <div><label class="f">Currency</label><input type="text" name="currency" value="{{ s.currency }}" maxlength="3"></div>
+      <div><label class="f">Time zone</label><input type="text" name="timezone" value="{{ s.timezone }}"></div>
+    </div>
+    <label class="f">Season ends (optional)</label>
+    <input type="date" name="season_end" value="{{ s.season_end }}">
+    <div class="help">Monthly subscriptions stop billing automatically after this date.</div>
+    <label class="f">Portal address</label>
+    <input type="text" name="portal_url" value="{{ s.portal_url }}" placeholder="http://wifi.lake.lan">
+    <div class="help">The address guests are redirected to. Set a matching DNS override in OPNsense (see the docs).</div>
+    <label class="f">Guest network</label>
+    <input type="text" name="guest_subnet" value="{{ s.guest_subnet }}">
+    <label class="f">Stripe secret key (optional now)</label>
+    <input type="password" name="stripe_secret_key" value="" placeholder="sk_test_… to try it out first">
+    <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+    <label class="f">Admin password</label>
+    <input type="password" name="admin_password" minlength="8" required>
+    <label class="f">Confirm admin password</label>
+    <input type="password" name="admin_password2" minlength="8" required>
+    <button class="full">Finish setup</button>
+  </form>
+</div>
+{% endblock %}

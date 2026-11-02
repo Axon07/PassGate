@@ -1,0 +1,32 @@
+{% extends "admin/base.html" %}
+{% set page = 'settings' %}
+{% block body %}
+{% if test_results %}<div class="note warn">{% for r in test_results %}<div>{{ r }}</div>{% endfor %}</div>{% endif %}
+<div class="card" style="max-width:720px">
+  <form method="post" action="/settings">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for key, label, kind, help in fields %}
+      <label class="f" for="{{ key }}">{{ label }}</label>
+      {% if kind == 'textarea' %}
+        <textarea id="{{ key }}" name="{{ key }}">{{ s[key] }}</textarea>
+      {% elif kind == 'secret' %}
+        <input id="{{ key }}" type="password" name="{{ key }}" autocomplete="off"
+               placeholder="{{ '•••••••• saved — leave blank to keep, type - to clear' if s[key] else 'not set' }}">
+      {% elif kind.startswith('select:') %}
+        <select id="{{ key }}" name="{{ key }}">
+          {% for opt in kind[7:].split('|') %}{% set v, l = opt.split('=', 1) %}
+          <option value="{{ v }}" {{ 'selected' if s[key] == v }}>{{ l }}</option>{% endfor %}
+        </select>
+      {% else %}
+        <input id="{{ key }}" type="{{ kind }}" name="{{ key }}" value="{{ s[key] }}">
+      {% endif %}
+      {% if help %}<div class="help">{{ help }}</div>{% endif %}
+    {% endfor %}
+    <label class="f">New admin password</label>
+    <input type="password" name="new_admin_password" autocomplete="new-password" placeholder="leave blank to keep">
+    <button class="full">Save settings</button>
+  </form>
+  <form method="post" action="/settings/test"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost full">Test Stripe &amp; router connection</button></form>
+</div>
+{% endblock %}

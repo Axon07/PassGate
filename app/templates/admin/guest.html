@@ -1,0 +1,92 @@
+{% extends "admin/base.html" %}
+{% set page = 'guests' %}
+{% block body %}
+<div class="card">
+  <h2>{{ u.email }} {% if u.disabled %}<span class="pill">blocked</span>{% endif %}</h2>
+  <p>{% if until %}Access until <strong>{{ fmt_ts(until) }}</strong> ({{ remaining(until) }}), up to {{ limit }} devices{% if u.device_limit_override %} (custom limit){% endif %}.
+     {% else %}<span class="muted">No active pass.</span>{% endif %}</p>
+  {% if u.stripe_customer_id %}<p class="help">Stripe customer: <code>{{ u.stripe_customer_id }}</code></p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Devices</h2>
+  <ul class="devs">
+  {% for d in devices %}
+    <li><div>{{ d.label or 'Device' }} <code>{{ d.mac }}</code>{% if d.source == 'manual' %} <span class="pill">added by MAC</span>{% elif d.source == 'invite' %} <span class="pill">joined with code</span>{% endif %}<div class="help">last IP {{ d.last_ip or '—' }} · added {{ fmt_ts(d.added_at) }}</div></div>
+      <form method="post" action="/guests/{{ u.id }}/action"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="remove_device"><input type="hidden" name="device_id" value="{{ d.id }}">
+        <button class="ghost small">Remove</button></form></li>
+  {% else %}<li class="muted">None.</li>{% endfor %}
+  </ul>
+  <div class="row" style="align-items:flex-end;margin-top:12px">
+    <form method="post" action="/guests/{{ u.id }}/action" class="row" style="align-items:flex-end;flex:2 1 320px">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add_mac">
+      <div><label class="f">Add device by MAC</label><input type="text" name="mac" placeholder="3c:22:fb:1a:2b:3c" required></div>
+      <div><label class="f">Name</label><input type="text" name="label" placeholder="Cabin TV"></div>
+      <button style="flex:none">Add</button>
+    </form>
+  </div>
+  <p class="help">Adding here can move a device off another account. Devices only get online while this guest has a pass.</p>
+  <div class="row" style="align-items:flex-end;margin-top:6px">
+    <form method="post" action="/guests/{{ u.id }}/action" class="row" style="align-items:flex-end;flex:2 1 320px">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set_limit">
+      <div><label class="f">Device limit for this guest</label>
+        <input type="number" name="limit" min="1" max="50" value="{{ u.device_limit_override or '' }}" placeholder="follow their plan"></div>
+      <button class="ghost" style="flex:none">Save limit</button>
+    </form>
+    {% if cooldown_min %}
+    <form method="post" action="/guests/{{ u.id }}/action" style="flex:1 1 200px">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="clear_cooldown">
+      <button class="ghost full">Let them swap now ({{ cooldown_min }} min left)</button></form>
+    {% endif %}
+  </div>
+  <p class="help">Blank = use the plan's limit. A custom limit applies to every pass they buy until you clear it.</p>
+</div>
+
+<div class="card">
+  <h2>Passes</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Plan</th><th>Status</th><th>From</th><th>Until</th><th>Paid</th><th></th></tr>
+    {% for p in passes %}
+    <tr><td>{{ p.plan_name }}{% if p.extra_devices and p.kind != 'addon' %} <span class="pill">+{{ p.extra_devices }} extra</span>{% endif %}{% if p.stripe_subscription_id %}<div class="help"><code>{{ p.stripe_subscription_id }}</code></div>{% endif %}</td>
+      <td>{{ p.status }}</td><td>{{ fmt_ts(p.starts_at) }}</td><td>{{ fmt_ts(p.ends_at) }}</td>
+      <td>{{ money(p.amount_cents) if p.source == 'stripe' else 'comp' }}</td>
+      <td>{% if p.status == 'active' %}
+        <form method="post" action="/guests/{{ u.id }}/action"><input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="action" value="end_pass"><input type="hidden" name="pass_id" value="{{ p.id }}">
+          <button class="ghost small">End now</button></form>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">None.</td></tr>{% endfor %}
+  </table></div>
+  <p class="help">Refunds and cancelling subscriptions are done in your Stripe dashboard; PassGate picks up the change within a few minutes.</p>
+</div>
+
+<div class="row" style="align-items:stretch">
+<div class="card">
+  <h2>Give a free pass</h2>
+  <form method="post" action="/guests/{{ u.id }}/action"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="grant">
+    <label class="f">Based on plan (for device limit)</label>
+    <select name="plan_id">{% for p in plans %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+    <label class="f">Hours (blank = plan length)</label><input type="number" name="hours" min="1">
+    <button class="full">Give pass</button></form>
+</div>
+<div class="card">
+  <h2>Account</h2>
+  <form method="post" action="/guests/{{ u.id }}/action"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="reset_pw">
+    <label class="f">Set new password</label><input type="text" name="password" minlength="6" required>
+    <button class="full">Reset password</button></form>
+  <form method="post" action="/guests/{{ u.id }}/action" style="margin-top:10px"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="refresh_stripe"><button class="ghost full">Re-check with Stripe</button></form>
+  <form method="post" action="/guests/{{ u.id }}/action" style="margin-top:10px"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="toggle_disable">
+    <button class="{{ 'ghost' if u.disabled else 'danger' }} full">{{ 'Unblock' if u.disabled else 'Block this guest' }}</button></form>
+</div>
+</div>
+<div class="card">
+  <form method="post" action="/guests/{{ u.id }}/action"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="notes">
+    <label class="f">Private notes</label><textarea name="notes" placeholder="Cabin 12, pays cash…">{{ u.notes }}</textarea>
+    <button class="ghost" style="margin-top:8px">Save notes</button></form>
+</div>
+{% endblock %}

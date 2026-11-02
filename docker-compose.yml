@@ -1,0 +1,30 @@
+# PassGate on its own small "services" network behind OPNsense.
+# See docs/opnsense-setup.md for why it isn't on the guest VLAN itself.
+#
+# Change: parent = the host's VLAN 51 interface (e.g. eth0.51, ens18.51,
+# or br0.51 on Unraid), plus the subnet, gateway (OPNsense's SERVICES
+# address) and the container's IP if you changed them.
+services:
+  passgate:
+    build: .
+    image: passgate:latest
+    container_name: passgate
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      - PORTAL_PORT=80
+      - ADMIN_PORT=8081
+    networks:
+      services:
+        ipv4_address: 10.51.0.2
+
+networks:
+  services:
+    driver: macvlan
+    driver_opts:
+      parent: eth0.51
+    ipam:
+      config:
+        - subnet: 10.51.0.0/29
+          gateway: 10.51.0.1

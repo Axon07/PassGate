@@ -1,0 +1,120 @@
+{% extends "admin/base.html" %}
+{% set page = 'plans' %}
+{% block body %}
+{% set days = p and p.duration_hours % 24 == 0 %}
+<div class="card" style="max-width:640px">
+  <h2>{{ 'Edit plan' if p else 'New plan' }}</h2>
+  <form method="post" action="/plans/{{ p.id if p else 0 }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f">Name</label>
+    <input type="text" name="name" value="{{ p.name if p else '' }}" required maxlength="60">
+    <label class="f">Short description</label>
+    <input type="text" name="description" value="{{ p.description if p else '' }}" maxlength="300">
+    <div class="row">
+      <div><label class="f">Price</label><input type="number" name="price" step="0.01" min="0.5"
+        value="{{ '%.2f' % (p.price_cents / 100) if p else '10.00' }}" required></div>
+      <div><label class="f">Devices per account</label><input type="number" name="max_devices" min="1" max="50"
+        value="{{ p.max_devices if p else 2 }}"></div>
+    </div>
+    <label class="f">Type</label>
+    <select name="kind" id="kind" onchange="toggle()">
+      <option value="one_time" {{ 'selected' if not p or p.kind == 'one_time' }}>One-time pass</option>
+      <option value="subscription" {{ 'selected' if p and p.kind == 'subscription' }}>Subscription (charges automatically)</option>
+    </select>
+
+    <div id="onetime">
+      <label class="f">Lasts</label>
+      <select name="duration_mode" id="dmode" onchange="toggle()">
+        <option value="hours" {{ 'selected' if not p or p.duration_mode == 'hours' }}>A fixed length of time</option>
+        <option value="season" {{ 'selected' if p and p.duration_mode == 'season' }}>Until the end of the season</option>
+      </select>
+      <div class="row" id="dlen">
+        <div><input type="number" name="duration_value" min="1"
+          value="{{ (p.duration_hours // 24 if days else p.duration_hours) if p else 1 }}"></div>
+        <div><select name="duration_unit">
+          <option value="days" {{ 'selected' if not p or days }}>days</option>
+          <option value="hours" {{ 'selected' if p and not days }}>hours</option></select></div>
+      </div>
+      <div class="help">Starts when they pay. Buying another pass adds on to the end of the current one.</div>
+    </div>
+
+    <div id="sub">
+      <label class="f">Charge every</label>
+      <div class="row">
+        <div><input type="number" name="interval_count" min="1" value="{{ p.interval_count if p else 1 }}"></div>
+        <div><select name="interval">
+          {% for i in ['day','week','month','year'] %}
+          <option value="{{ i }}" {{ 'selected' if (p and p.interval == i) or (not p and i == 'month') }}>{{ i }}(s)</option>
+          {% endfor %}</select></div>
+      </div>
+      <label style="display:flex;gap:8px;margin-top:10px"><input type="checkbox" name="stop_at_season_end"
+        {{ 'checked' if not p or p.stop_at_season_end }}> Stop charging at the end of the season</label>
+    </div>
+
+    <fieldset style="border:1px solid var(--line);border-radius:10px;padding:4px 14px 14px;margin:16px 0 0">
+      <legend style="padding:0 6px;font-weight:650">Extra device slots</legend>
+      <label style="display:flex;gap:8px;margin-top:6px"><input type="checkbox" name="extras_on" id="xon" onchange="toggle()"
+        {{ 'checked' if p and p.extra_device_cents }}> Sell extra devices on top of the ones included</label>
+      <div id="xbox">
+        <div class="row">
+          <div><label class="f">Price per extra device</label><input type="number" name="extra_price" step="0.01" min="0"
+            value="{{ '%.2f' % (p.extra_device_cents / 100) if p and p.extra_device_cents else '3.00' }}"></div>
+          <div><label class="f">Most extras per account</label><input type="number" name="max_extra_devices" min="1" max="50"
+            value="{{ p.max_extra_devices if p and p.max_extra_devices else 3 }}"></div>
+        </div>
+        <div class="help">For the full length of the pass (or each billing period). Bought later, it's prorated for the time left.</div>
+        <label class="f">Discount on each further extra</label>
+        <select name="extra_discount_mode" id="xmode" onchange="toggle()">
+          {% set m = p.extra_discount_mode if p else 'none' %}
+          <option value="none" {{ 'selected' if m in (None, '', 'none') }}>No discount: every extra costs the same</option>
+          <option value="percent" {{ 'selected' if m == 'percent' }}>Percent off each further extra</option>
+          <option value="amount" {{ 'selected' if m == 'amount' }}>Fixed amount off each further extra</option>
+        </select>
+        <div class="row" id="xdisc">
+          <div id="xpct"><label class="f">% off per extra</label><input type="number" name="extra_discount_pct" min="0" max="100"
+            value="{{ p.extra_discount_value if p and p.extra_discount_mode == 'percent' else 10 }}"></div>
+          <div id="xamt"><label class="f">Amount off per extra</label><input type="number" name="extra_discount_amt" step="0.01" min="0"
+            value="{{ '%.2f' % (p.extra_discount_value / 100) if p and p.extra_discount_mode == 'amount' else '0.50' }}"></div>
+          <div><label class="f">Never cheaper than</label><input type="number" name="extra_min" step="0.01" min="0"
+            value="{{ '%.2f' % (p.extra_min_cents / 100) if p and p.extra_min_cents else '0.00' }}"></div>
+        </div>
+        {% if p and xs.enabled(p) %}<div class="help">Saved prices: {% for c in xs.price_list(p) %}{{ money(c) }}{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+        <div class="help">Example: $3 with 10% off → 1st extra $3, 2nd $2.70, 3rd $2.40.</div>
+      </div>
+    </fieldset>
+
+    {% if tiers %}
+    <label class="f">Speed tier</label>
+    <select name="speed_tier">
+      <option value="">No tier (default speed)</option>
+      {% for name, alias in tiers %}<option value="{{ name }}" {{ 'selected' if p and p.speed_tier == name }}>{{ name }} ({{ alias }})</option>{% endfor %}
+    </select>
+    <div class="help">Changes apply to new purchases. Set the actual speeds in OPNsense's traffic shaper.</div>
+    {% elif p and p.speed_tier %}<input type="hidden" name="speed_tier" value="{{ p.speed_tier }}">{% endif %}
+    <div class="row" style="margin-top:10px">
+      <div><label class="f">Display order</label><input type="number" name="sort" value="{{ p.sort if p else 0 }}"></div>
+      <div><label style="display:flex;gap:8px;margin-top:34px"><input type="checkbox" name="active"
+        {{ 'checked' if not p or p.active }}> Show to guests</label></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button>Save plan</button>
+      {% if p %}<button class="danger" name="delete" value="1" onclick="return confirm('Remove this plan?')">Remove</button>{% endif %}
+      <a class="btn ghost" href="/plans">Cancel</a>
+    </div>
+  </form>
+</div>
+<script>
+function toggle(){
+  var sub = document.getElementById('kind').value === 'subscription';
+  document.getElementById('sub').style.display = sub ? '' : 'none';
+  document.getElementById('onetime').style.display = sub ? 'none' : '';
+  document.getElementById('dlen').style.display = document.getElementById('dmode').value === 'season' ? 'none' : '';
+  document.getElementById('xbox').style.display = document.getElementById('xon').checked ? '' : 'none';
+  var xm = document.getElementById('xmode').value;
+  document.getElementById('xdisc').style.display = xm === 'none' ? 'none' : '';
+  document.getElementById('xpct').style.display = xm === 'percent' ? '' : 'none';
+  document.getElementById('xamt').style.display = xm === 'amount' ? '' : 'none';
+}
+toggle();
+</script>
+{% endblock %}

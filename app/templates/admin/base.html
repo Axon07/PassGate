@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ site_name }} · Admin</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap wide">
+  <header class="top"><h1>{{ site_name }} <span class="muted" style="font-weight:400">admin</span></h1>
+    {% if nav is not defined or nav %}
+    <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="ghost small">Log out</button></form>{% endif %}
+  </header>
+  {% if nav is not defined or nav %}
+  <nav class="admin">
+    <a href="/" class="{{ 'on' if page == 'dash' }}">Dashboard</a>
+    <a href="/guests" class="{{ 'on' if page == 'guests' }}">Guests</a>
+    <a href="/plans" class="{{ 'on' if page == 'plans' }}">Plans &amp; prices</a>
+    <a href="/bypass" class="{{ 'on' if page == 'bypass' }}">Always online</a>
+    <a href="/settings" class="{{ 'on' if page == 'settings' }}">Settings</a>
+  </nav>
+  {% endif %}
+  {% if msg %}<div class="note ok">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="note err">{{ err }}</div>{% endif %}
+  {% block body %}{% endblock %}
+</div>
+</body>
+</html>

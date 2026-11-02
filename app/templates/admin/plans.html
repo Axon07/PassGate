@@ -1,0 +1,20 @@
+{% extends "admin/base.html" %}
+{% set page = 'plans' %}
+{% block body %}
+{% if welcome %}<div class="note ok">Setup done. Here are three starter plans — set your own prices, then connect Stripe and your router in Settings.</div>{% endif %}
+<div class="card">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">Plans guests can buy</h2>
+    <a class="btn small" style="flex:none;padding:8px 12px" href="/plans/0">+ New plan</a></div>
+  <div class="tablewrap"><table>
+    <tr><th>Name</th><th>Price</th><th>Type</th><th>Devices</th><th>Tier</th><th>Shown</th><th></th></tr>
+    {% for p in plans %}
+    <tr><td><strong>{{ p.name }}</strong><div class="help">{{ p.description }}</div></td>
+      <td>{{ money(p.price_cents) }}</td>
+      <td>{{ 'Subscription' if p.kind == 'subscription' else 'One-time' }}<div class="help">{{ describe_term(p) }}</div></td>
+      <td>{{ p.max_devices }}{% if xs.enabled(p) %}<div class="help">+ up to {{ p.max_extra_devices }} extra ({% for c in xs.price_list(p) %}{{ money(c) }}{{ ', ' if not loop.last }}{% endfor %})</div>{% endif %}</td><td>{{ p.speed_tier or '—' }}</td><td>{{ 'Yes' if p.active else 'Hidden' }}</td>
+      <td><a href="/plans/{{ p.id }}">Edit</a></td></tr>
+    {% else %}<tr><td colspan="7" class="muted">No plans yet.</td></tr>{% endfor %}
+  </table></div>
+  <p class="help">Price changes apply to new purchases. Existing subscribers keep the price they signed up at.</p>
+</div>
+{% endblock %}

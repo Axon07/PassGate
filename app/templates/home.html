@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lead">{{ welcome_text }}</p>
+{% if err %}<div class="note err">{{ err }}</div>{% endif %}
+{% if msg %}<div class="note ok">{{ msg }}</div>{% endif %}
+
+{% if plans %}
+<form method="post" action="/start">
+  <div class="plans">
+    {% for p in plans %}
+    <label class="plan">
+      <input type="radio" name="plan_id" value="{{ p.id }}" required
+             {% if (chosen and chosen == p.id) or (not chosen and loop.first) %}checked{% endif %}>
+      <div>
+        <div class="name">{{ p.name }}</div>
+        <div class="meta">{{ describe_term(p) }} · up to {{ p.max_devices }} device{{ 's' if p.max_devices != 1 }}</div>
+        {% if p.description %}<div class="meta">{{ p.description }}</div>{% endif %}
+        {% if xs.enabled(p) %}
+        <div class="meta">{{ xs.describe(p)|capitalize }}</div>
+        <select class="extra-sel" data-plan="{{ p.id }}" aria-label="Extra devices for {{ p.name }}" style="margin-top:6px;padding:6px 8px">
+          <option value="0">No extra devices</option>
+          {% set ns = namespace(total=0) %}
+          {% for price in xs.price_list(p) %}{% set ns.total = ns.total + price %}
+          <option value="{{ loop.index }}">+{{ loop.index }} device{{ 's' if loop.index > 1 }} (+{{ money(ns.total) }}{% if p.kind == 'subscription' %}/{{ p.interval }}{% endif %})</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </div>
+      <div class="price">{{ money(p.price_cents) }}{% if p.kind == 'subscription' %}<small>/{{ p.interval if p.interval_count == 1 else p.interval_count ~ ' ' ~ p.interval ~ 's' }}</small>{% endif %}</div>
+    </label>
+    {% endfor %}
+  </div>
+  <input type="hidden" name="extra" id="extra" value="0">
+  <div class="card">
+    <h2>Your account</h2>
+    <p class="muted" style="margin-top:-6px">Use this to add your other devices or come back later.</p>
+    <label class="f" for="email">Email</label>
+    <input id="email" type="email" name="email" value="{{ email or '' }}" autocomplete="email" required>
+    <label class="f" for="pw">Password</label>
+    <input id="pw" type="password" name="password" minlength="6" autocomplete="new-password" required>
+    <button class="full" type="submit">Continue to payment</button>
+    <div class="help" style="text-align:center;margin-top:8px">Secure card payment by Stripe</div>
+  </div>
+</form>
+{% else %}
+<div class="card"><p>No passes are on sale right now.</p></div>
+{% endif %}
+
+<div class="card">
+  <details {% if show_login %}open{% endif %}>
+    <summary>Already paid? Log in to connect this device</summary>
+    <form method="post" action="/login">
+      <label class="f" for="le">Email</label>
+      <input id="le" type="email" name="email" value="{{ login_email or '' }}" autocomplete="email" required>
+      <label class="f" for="lp">Password</label>
+      <input id="lp" type="password" name="password" autocomplete="current-password" required>
+      <button class="full" type="submit">Log in</button>
+    </form>
+  </details>
+</div>
+<div class="card">
+  <details {% if show_join %}open{% endif %}>
+    <summary>Have a join code from family or a friend?</summary>
+    <p class="help">Someone with a pass can make a code on their account page so this device can use one of their device slots.</p>
+    <form method="post" action="/join">
+      <label class="f" for="jc">Join code</label>
+      <input id="jc" type="text" name="code" placeholder="ABC-123" autocomplete="off" autocapitalize="characters" required
+             style="text-transform:uppercase;letter-spacing:.1em">
+      <button class="full" type="submit">Join</button>
+    </form>
+  </details>
+</div>
+<script>
+(function () {
+  var form = document.querySelector('form[action="/start"]');
+  if (!form) return;
+  function sync() {
+    var chosen = form.querySelector('input[name=plan_id]:checked');
+    var extra = 0;
+    form.querySelectorAll('.extra-sel').forEach(function (s) {
+      var on = chosen && s.dataset.plan === chosen.value;
+      s.style.display = on ? '' : 'none';
+      if (on) extra = s.value;
+    });
+    document.getElementById('extra').value = extra;
+  }
+  form.addEventListener('change', sync);
+  sync();
+})();
+</script>
+{% if not device_known %}<p class="help">Couldn't read this device's network address yet. If payment doesn't connect you, reconnect to the Wi-Fi.</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% set page = 'bypass' %}
+{% block body %}
+<div class="card">
+  <h2>Always online</h2>
+  <p class="muted">These devices skip the portal and never need a pass: your own phones, cameras, the camp
+    office, a weather station. They're matched by MAC address, so anyone who copies one of these MACs gets free
+    internet too. Keep the list short, and remove devices you no longer use.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Name</th><th>MAC</th><th>Added</th><th></th></tr>
+    {% for b in items %}
+    <tr><td>{{ b.label or '—' }}</td><td><code>{{ b.mac }}</code></td><td class="muted">{{ fmt_ts(b.created_at) }}</td>
+      <td><form method="post" action="/bypass"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="remove"><input type="hidden" name="bypass_id" value="{{ b.id }}">
+        <button class="ghost small">Remove</button></form></td></tr>
+    {% else %}<tr><td colspan="4" class="muted">Nothing here yet.</td></tr>{% endfor %}
+  </table></div>
+</div>
+<div class="card" style="max-width:560px">
+  <h2>Add a device</h2>
+  <form method="post" action="/bypass"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f">MAC address</label><input type="text" name="mac" placeholder="3c:22:fb:1a:2b:3c" required>
+    <div class="help">Phones use a private MAC per network: copy it from the phone's settings for <em>this</em> Wi-Fi.</div>
+    <label class="f">Name</label><input type="text" name="label" placeholder="Office phone" maxlength="60">
+    <button class="full">Add</button>
+  </form>
+</div>
+{% endblock %}

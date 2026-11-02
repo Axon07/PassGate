@@ -1,0 +1,8 @@
+fastapi==0.162.0
+uvicorn==0.54.0
+Jinja2==3.1.6
+stripe==16.1.0
+httpx==0.28.1
+python-multipart==0.0.32
+itsdangerous==2.2.0
+tzdata==2026.6

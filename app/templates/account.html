@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block topright %}<form method="post" action="/logout"><button class="ghost small">Log out</button></form>{% endblock %}
+{% block body %}
+{% set MSGS = {
+  'paid': ('ok', "Payment received — you're online. Thanks!"),
+  'paidlimit': ('warn', "Payment received, thanks! Your pass covers " ~ limit ~ " device" ~ ('s' if limit != 1 else '') ~ " and they're all in use. Pick one below to swap for this device (no waiting this time)."),
+  'online': ('ok', 'This device is connected.'),
+  'moved': ('ok', "This device was registered to a different account. It's been moved to this one and is connected."),
+  'limit': ('warn', "Your pass covers " ~ limit ~ " device" ~ ('s' if limit != 1 else '') ~ ". Swap one out below to connect this one."),
+  'cooldown': ('warn', "You've swapped devices recently. You can swap again in " ~ cooldown_min ~ " min."),
+  'noaccess': ('err', "You need an active pass before adding devices."),
+  'taken': ('err', "That device is registered to another account. Connect to the Wi-Fi on the device itself and log in there to move it, or ask the owner."),
+  'badmac': ('err', "That doesn't look like a valid MAC address. It's 12 characters like 3c:22:fb:1a:2b:3c."),
+  'manualok': ('ok', "Device added. It should get online within a minute."),
+  'nodevice': ('err', "Couldn't identify this device. Reconnect to the Wi-Fi and try again."),
+  'slots': ('ok', "Payment received — your extra device slots are ready."),
+  'noslots': ('err', "Extra device slots aren't available on your current pass."),
+  'invite': ('ok', "Join code created. On the other device, connect to the Wi-Fi and enter it on the sign-in page."),
+  'pwok': ('ok', 'Password changed.'),
+  'pwfail': ('err', 'Current password was wrong, or the new one is under 6 characters.'),
+} %}
+{% if msg in MSGS %}<div class="note {{ MSGS[msg][0] }}">{{ MSGS[msg][1] }}</div>{% endif %}
+
+<div class="card">
+  {% if until %}
+  <div class="status"><span class="dot {{ 'on' if this_on }}"></span>
+    <span class="big">{{ 'Online' if this_on else 'Pass active' }}</span>
+    <span class="muted">{{ remaining(until) }}</span></div>
+  <p class="muted" style="margin:6px 0 0">Until {{ fmt_ts(until) }}{% if subs %} · renews automatically{% endif %}</p>
+  {% if not this_on and this_mac %}
+    {% if devices|length < limit %}
+    <form method="post" action="/device/add"><button class="full">Connect this device</button></form>
+    {% endif %}
+  {% endif %}
+  {% else %}
+  <div class="status"><span class="dot"></span><span class="big">No active pass</span></div>
+  <p class="muted" style="margin:6px 0 0">Buy a pass below to get online.</p>
+  {% endif %}
+</div>
+
+{% if until %}
+<div class="card">
+  <h2>Devices ({{ devices|length }} of {{ limit }})</h2>
+  {% set can_swap = not this_on and this_mac and devices|length >= limit %}
+  {% if can_swap and cooldown_min %}<p class="help">You can swap devices again in {{ cooldown_min }} min.</p>{% endif %}
+  <ul class="devs">
+    {% for d in devices %}
+    <li>
+      <div>{{ d.label or 'Device' }}{% if d.mac == this_mac %} <span class="pill">this one</span>{% endif %}
+        {% if d.source == 'manual' %} <span class="pill">added by MAC</span>{% elif d.source == 'invite' %} <span class="pill">joined with code</span>{% endif %}
+        <div class="help">{% if d.source == 'manual' %}{{ d.mac }} · {% endif %}added {{ fmt_ts(d.added_at) }}</div></div>
+      <div class="row" style="flex:none">
+        {% if can_swap and not cooldown_min %}
+        <form method="post" action="/device/add"><input type="hidden" name="replace_id" value="{{ d.id }}">
+          <button class="small">Swap for this device</button></form>
+        {% endif %}
+        <form method="post" action="/device/remove"><input type="hidden" name="device_id" value="{{ d.id }}">
+          <button class="ghost small">Remove</button></form>
+      </div>
+    </li>
+    {% else %}<li class="muted">No devices yet.</li>{% endfor %}
+  </ul>
+  {% if manual_mac and devices|length < limit %}
+  <details style="margin-top:12px"><summary>Add a TV, console or other device by MAC address</summary>
+    <p class="help">For devices that can't show this sign-in page. Find the MAC under the device's
+      network or Wi-Fi settings <em>while connected to this network</em> (sometimes called "Wi-Fi address").</p>
+    <form method="post" action="/device/manual">
+      <label class="f">MAC address</label><input type="text" name="mac" placeholder="3c:22:fb:1a:2b:3c" required>
+      <label class="f">Name (optional)</label><input type="text" name="label" placeholder="Living room TV" maxlength="40">
+      <button class="full">Add device</button>
+    </form>
+  </details>
+  {% endif %}
+  {% if quote and quote.options %}
+  <form method="post" action="/slots" style="margin-top:14px">
+    <label class="f">Need more devices?</label>
+    <select name="n">
+      {% for n, cents, full in quote.options %}
+      <option value="{{ n }}">+{{ n }} slot{{ 's' if n > 1 }}: {{ money(cents) }} now{% if quote.recurring %}, then {{ money(full) }}/{{ quote.plan.interval }}{% endif %}</option>
+      {% endfor %}
+    </select>
+    <button class="full" style="margin-top:8px">Buy device slots</button>
+    <div class="help">{% if quote.recurring %}Charged for the time left until your next renewal, then added to your subscription.{% else %}Charged only for the time left on your pass{% if quote.options[0][1] == 50 %} (minimum card charge {{ money(50) }}){% endif %}. Extra slots end when your pass does.{% endif %}</div>
+  </form>
+  {% elif quote and quote.held %}<p class="help">You have {{ quote.held }} extra slot{{ 's' if quote.held != 1 }} (the most this plan allows).</p>{% endif %}
+  {% if cooldown_setting > 0 %}<p class="help" style="margin-bottom:0">Removing or swapping a device starts a {{ cooldown_setting }}-minute wait before the next swap.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if until %}
+<div class="card">
+  <h2>Connect a family member's device</h2>
+  <p class="muted" style="margin-top:-6px">Make a one-time code. They enter it on their own device's sign-in page and use one of
+    your device slots, with no need for your password or a card.</p>
+  {% if new_code %}
+  <div class="note ok" style="text-align:center">
+    <div class="help" style="color:inherit">Join code (works once, for 24 hours)</div>
+    <div style="font-size:2rem;font-weight:800;letter-spacing:.15em">{{ new_code }}</div>
+  </div>
+  {% endif %}
+  <form method="post" action="/invite" class="row" style="align-items:flex-end">
+    <div><label class="f">Whose device? (optional)</label><input type="text" name="label" placeholder="Emma's iPad" maxlength="40"></div>
+    <button style="flex:none">Make a code</button>
+  </form>
+  {% if invites %}
+  <ul class="devs" style="margin-top:10px">
+    {% for i in invites %}
+    <li><div><code>{{ i.code }}</code> {{ i.label }}<div class="help">unused · expires {{ fmt_ts(i.expires_at) }}</div></div>
+      <form method="post" action="/invite/cancel"><input type="hidden" name="invite_id" value="{{ i.id }}">
+        <button class="ghost small">Cancel</button></form></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if plans %}
+<div class="card">
+  <h2>{{ 'Add time' if until else 'Buy a pass' }}</h2>
+  {% for p in plans %}
+  <form method="post" action="/buy" style="margin-bottom:8px">
+    <input type="hidden" name="plan_id" value="{{ p.id }}">
+    <button class="ghost full" style="margin-top:0;text-align:left;display:flex;justify-content:space-between">
+      <span>{{ p.name }} <span class="muted" style="font-weight:400">· {{ describe_term(p) }}</span></span>
+      <span>{{ money(p.price_cents) }}</span></button>
+  </form>
+  {% endfor %}
+  {% if until %}<p class="help">One-time passes stack: extra time starts when your current pass ends.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if subs or user.stripe_customer_id %}
+<div class="card">
+  <h2>Billing</h2>
+  <p class="muted">Cancel a subscription, update your card, or get receipts.</p>
+  <a class="btn ghost" href="/manage">Manage billing</a>
+</div>
+{% endif %}
+
+<div class="card">
+  <details><summary>Change password</summary>
+    <form method="post" action="/password">
+      <label class="f">Current password</label><input type="password" name="current" required>
+      <label class="f">New password</label><input type="password" name="new" minlength="6" required>
+      <button class="full">Save</button>
+    </form>
+  </details>
+  <p class="help" style="margin-bottom:0">Signed in as {{ user.email }}</p>
+</div>
+{% endblock %}

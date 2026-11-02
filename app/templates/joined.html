@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+{% if fresh %}<div class="note ok">You're in! This device is now connected.</div>{% endif %}
+<div class="card">
+  <div class="status"><span class="dot on"></span><span class="big">Online</span>
+    {% if until %}<span class="muted">{{ remaining(until) }}</span>{% endif %}</div>
+  <p class="muted" style="margin:6px 0 0">Connected through {{ owner }}'s pass{% if until %}, until {{ fmt_ts(until) }}{% endif %}.</p>
+  {% if dev and dev.label %}<p class="help">This device: {{ dev.label }}</p>{% endif %}
+</div>
+<p class="help">Need more time or your own pass? Ask the account holder, or forget this Wi-Fi network and reconnect to buy your own.</p>
+{% endblock %}

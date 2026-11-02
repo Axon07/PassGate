@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% set page = 'dash' %}
+{% block body %}
+{% for w in warnings %}<div class="note warn">{{ w }}</div>{% endfor %}
+<div class="stats">
+  <div class="stat"><div class="v">{{ stats.online_users }}</div><div class="k">guests with access</div></div>
+  <div class="stat"><div class="v">{{ stats.devices }}</div><div class="k">devices allowed</div></div>
+  <div class="stat"><div class="v">{{ stats.subs }}</div><div class="k">active subscriptions</div></div>
+  <div class="stat"><div class="v">{{ money(stats.rev_30) }}</div><div class="k">sales, last 30 days</div></div>
+  <div class="stat"><div class="v">{{ money(stats.rev_all) }}</div><div class="k">sales, all time</div></div>
+</div>
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">Recent activity</h2>
+    <form method="post" action="/sync" style="flex:none"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="ghost small">Check Stripe &amp; sync router now</button></form>
+  </div>
+  <div class="tablewrap"><table>
+    <tr><th>When</th><th>What</th><th>Detail</th></tr>
+    {% for e in events %}<tr><td>{{ fmt_ts(e.ts) }}</td><td>{{ e.kind }}</td><td class="muted">{{ e.detail }}</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">Nothing yet.</td></tr>{% endfor %}
+  </table></div>
+  <p class="help">Subscription sales are counted once, at sign-up. Stripe has full revenue reports.</p>
+</div>
+{% endblock %}

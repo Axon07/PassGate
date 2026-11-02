@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% set page = 'guests' %}
+{% block body %}
+<div class="card">
+  <form method="get" class="row"><input type="text" name="q" value="{{ q }}" placeholder="Search email">
+    <button style="flex:none">Search</button></form>
+</div>
+<div class="card">
+  <div class="tablewrap"><table>
+    <tr><th>Email</th><th>Access until</th><th>Devices</th><th>Joined</th></tr>
+    {% for u in users %}
+    <tr><td><a href="/guests/{{ u.id }}">{{ u.email }}</a>{% if u.disabled %} <span class="pill">blocked</span>{% endif %}</td>
+      <td>{% if u.until %}{{ fmt_ts(u.until) }} <span class="muted">({{ remaining(u.until) }})</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{{ u.ndev }}</td><td class="muted">{{ fmt_ts(u.created_at) }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">No guests yet.</td></tr>{% endfor %}
+  </table></div>
+</div>
+<div class="card" style="max-width:520px">
+  <details><summary>Create an account for someone (family, staff…)</summary>
+    <form method="post" action="/guests/new"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f">Email</label><input type="email" name="email" required>
+      <label class="f">Password</label><input type="text" name="password" minlength="6" required>
+      <button class="full">Create, then give them a pass</button></form>
+  </details>
+</div>
+{% endblock %}
