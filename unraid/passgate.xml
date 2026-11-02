@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>PassGate</Name>
+  <Repository>ghcr.io/axon07/passgate:latest</Repository>
+  <Registry>https://github.com/Axon07/Passgate/pkgs/container/passgate</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Axon07/Passgate/issues</Support>
+  <Project>https://github.com/Axon07/Passgate</Project>
+  <Overview>Sell Wi-Fi passes with Stripe. A self-hosted captive portal for campgrounds, lakes, cabins, RV parks and marinas: guests join your open Wi-Fi, pick a day, weekend or monthly pass, pay by card and are online right away. Works with any access points; the firewall side uses OPNsense.[br][br]
+[b]Trying it out:[/b] the defaults run on the normal bridge network in dry-run mode. Open the WebUI, finish the setup wizard, and click through the guest pages on the portal port.[br][br]
+[b]For real use:[/b] set Network Type to your services VLAN (e.g. br0.51) with a fixed IP (e.g. 10.51.0.2). The port settings are then ignored (the portal listens on 80, the admin page on 8081). See the network guide in the project's docs.</Overview>
+  <Category>Network:Web Network:Other Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8081]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Axon07/Passgate/main/unraid/passgate.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Axon07/Passgate/main/docs/icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>OPNsense (as a VM or separate box) for the firewall side. Not needed for trying it out.</Requires>
+  <Config Name="Guest portal port" Target="80" Default="8090" Mode="tcp" Description="Port for the guest sign-in pages (bridge mode only)." Type="Port" Display="always" Required="true" Mask="false">8090</Config>
+  <Config Name="Admin port" Target="8081" Default="8091" Mode="tcp" Description="Port for the owner dashboard (bridge mode only). Never expose this to guests." Type="Port" Display="always" Required="true" Mask="false">8091</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/passgate" Mode="rw" Description="Database, settings and plans. Back this folder up." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/passgate</Config>
+  <Config Name="Time zone" Target="TZ" Default="" Mode="" Description="Optional, e.g. America/Toronto. The setup wizard also detects it from your browser." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>

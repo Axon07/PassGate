@@ -61,7 +61,7 @@ Set OPNsense and the container to **start automatically** after a reboot.
 With the host's VLAN 51 interface as `eth0.51` (change it to yours):
 
 ```bash
-docker network create -d macvlan --subnet 10.51.0.0/29 --gateway 10.51.0.1 -o parent=eth0.51 passgate-net && docker build -t passgate:latest . && docker run -d --name passgate --restart unless-stopped --network passgate-net --ip 10.51.0.2 -v passgate-data:/data passgate:latest && docker logs passgate
+docker network create -d macvlan --subnet 10.51.0.0/29 --gateway 10.51.0.1 -o parent=eth0.51 passgate-net && docker run -d --name passgate --restart unless-stopped --network passgate-net --ip 10.51.0.2 -v passgate-data:/data ghcr.io/axon07/passgate:latest && docker logs passgate
 ```
 
 Note that with `macvlan`, the host itself can't reach the container's IP. That's normal; you'll reach
@@ -78,7 +78,7 @@ the admin page through OPNsense (section 5).
    VLAN 51. Inside it:
 
    ```bash
-   docker build -t passgate:latest . && docker run -d --name passgate --restart unless-stopped -p 80:80 -p 8081:8081 -v passgate-data:/data passgate:latest
+   docker run -d --name passgate --restart unless-stopped -p 80:80 -p 8081:8081 -v passgate-data:/data ghcr.io/axon07/passgate:latest
    ```
 </details>
 
@@ -91,10 +91,11 @@ the admin page through OPNsense (section 5).
    then start Docker again.
 3. **VMs → Add VM** for OPNsense with three network cards: `br0` (WAN), `br0.50` (GUEST),
    `br0.51` (SERVICES). Turn on *autostart*.
-4. Copy the PassGate folder to `appdata/passgate-src` over the network share, then in the terminal:
+4. Add PassGate from its template (see the README's Unraid section), set **Network Type** to `br0.51` and
+   **Fixed IP** to `10.51.0.2`. Or from the terminal:
 
    ```bash
-   cd /mnt/user/appdata/passgate-src && docker build -t passgate:latest . && docker run -d --name passgate --restart unless-stopped --network br0.51 --ip 10.51.0.2 -v /mnt/user/appdata/passgate:/data passgate:latest && docker logs passgate
+   docker run -d --name passgate --restart unless-stopped --network br0.51 --ip 10.51.0.2 -v /mnt/user/appdata/passgate:/data ghcr.io/axon07/passgate:latest && docker logs passgate
    ```
 </details>
 

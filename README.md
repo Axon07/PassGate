@@ -1,14 +1,18 @@
 <div align="center">
 
-# 📶 PassGate
+<img src="docs/icon.png" width="96" alt="PassGate logo">
+
+# PassGate
 
 **Sell Wi-Fi passes with Stripe. Self-hosted, open source, and it works with the access points you already have.**
 
 A captive portal for campgrounds, lakes, cabins, RV parks, marinas, and anywhere else you share an internet connection with paying guests.
 
+[![CI](https://github.com/Axon07/Passgate/actions/workflows/ci.yml/badge.svg)](https://github.com/Axon07/Passgate/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Axon07/Passgate?include_prereleases&color=1f6f66)](https://github.com/Axon07/Passgate/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1f6f66.svg)](LICENSE)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)
+[![Docker image](https://img.shields.io/badge/image-ghcr.io%2Faxon07%2Fpassgate-2496ED?logo=docker&logoColor=white)](https://github.com/Axon07/Passgate/pkgs/container/passgate)
 ![Stripe](https://img.shields.io/badge/payments-Stripe-635BFF?logo=stripe&logoColor=white)
 ![OPNsense](https://img.shields.io/badge/firewall-OPNsense-D94F00?logo=opnsense&logoColor=white)
 
@@ -111,9 +115,9 @@ PassGate only decides **who** gets through; the firewall enforces it. Guest traf
 
 > **Try it first, no router needed:**
 > ```bash
-> pip install -r requirements.txt && DATA_DIR=./data PORTAL_PORT=8080 ADMIN_PORT=8081 python -m app.main
+> docker run -d --name passgate-try -p 8090:80 -p 8091:8081 -v passgate-try:/data ghcr.io/axon07/passgate:latest
 > ```
-> Open `http://localhost:8081/setup`. In dry-run mode payments work but nobody is actually let online.
+> Open `http://localhost:8091/setup`, then the guest page on port 8090. In dry-run mode payments work (use a Stripe test key) but nobody is actually let online.
 
 **For real:**
 
@@ -121,15 +125,29 @@ PassGate only decides **who** gets through; the firewall enforces it. Guest traf
 2. **Run the container** on any Docker host attached to the small services network (VLAN 51) behind OPNsense. Set `parent` in `docker-compose.yml` to that host's VLAN 51 interface (e.g. `eth0.51`), then:
 
    ```bash
-   git clone https://github.com/Axon07/Passgate.git passgate && cd passgate && docker compose up -d --build
+   mkdir passgate && cd passgate && curl -fsSLO https://raw.githubusercontent.com/Axon07/Passgate/main/docker-compose.yml && docker compose up -d
    ```
 
-   Prefer plain Docker, or running on Proxmox or Unraid? The [network guide](docs/opnsense-setup.md#1-hardware-where-opnsense-and-passgate-run) has examples.
+   The image (`ghcr.io/axon07/passgate`) is built for amd64 and arm64, so it runs on a Raspberry Pi too. **Unraid** users can add it from a template (see below). Plain Docker and Proxmox examples are in the [network guide](docs/opnsense-setup.md#1-hardware-where-opnsense-and-passgate-run).
 
 3. **Open the admin page** at `http://<OPNsense WAN IP>:8081/setup`. Set your network name, portal address and admin password.
 4. **Set your prices** under *Plans & prices*. Three starter plans are created for you.
 5. In **Settings**, add your Stripe key and OPNsense API details, switch *Router* to OPNsense, and press **Test**.
 6. Buy a pass on your phone with Stripe's test card `4242 4242 4242 4242`. When it works, swap in your live key. 🎉
+
+<details>
+<summary><b>Unraid</b></summary>
+
+Until PassGate is listed in Community Applications, add its template by hand. In the Unraid terminal, run:
+
+```bash
+wget -qO /boot/config/plugins/dockerMan/templates-user/my-PassGate.xml https://raw.githubusercontent.com/Axon07/Passgate/main/unraid/passgate.xml
+```
+
+then **Docker → Add Container → Template: PassGate**. The defaults run in bridge mode for trying it out. For real use, set **Network Type** to your services VLAN (e.g. `br0.51`) and a **Fixed IP** (e.g. `10.51.0.2`).
+</details>
+
+**Updating:** pull the new image and recreate the container (`docker compose pull && docker compose up -d`, or *Check for updates* in Unraid). Your data stays in the data folder, and the database upgrades itself on start.
 
 ## 📚 Guide
 

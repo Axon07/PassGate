@@ -6,8 +6,8 @@
 # address) and the container's IP if you changed them.
 services:
   passgate:
-    build: .
-    image: passgate:latest
+    image: ghcr.io/axon07/passgate:latest
+    # build: .        # or build from this folder instead of pulling
     container_name: passgate
     restart: unless-stopped
     volumes:
