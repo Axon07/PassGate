@@ -117,7 +117,7 @@ PassGate only decides **who** gets through; the firewall enforces it. Guest traf
 
 > **Try it first, no router needed:**
 > ```bash
-> docker run -d --name passgate-try -p 8090:80 -p 8443:443 -p 8091:8081 -v passgate-try:/data ghcr.io/axon07/passgate:latest
+> docker run -d --name passgate-try -p 8090:80 -p 8453:443 -p 8091:8081 -v passgate-try:/data ghcr.io/axon07/passgate:latest
 > ```
 > Open `http://localhost:8091/setup`, then the guest page on port 8090. In dry-run mode payments work (use a Stripe test key) but nobody is actually let online.
 
