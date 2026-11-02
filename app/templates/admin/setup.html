@@ -10,7 +10,10 @@
     <input type="text" name="site_name" value="{{ s.site_name }}" required>
     <div class="row">
       <div><label class="f">Currency</label><input type="text" name="currency" value="{{ s.currency }}" maxlength="3"></div>
-      <div><label class="f">Time zone</label><input type="text" name="timezone" value="{{ s.timezone }}"></div>
+      <div><label class="f">Time zone</label>
+        <select name="timezone" id="tz">
+          {% for z in timezones %}<option value="{{ z }}" {{ 'selected' if s.timezone == z }}>{{ z.replace('_', ' ') }}</option>{% endfor %}
+        </select></div>
     </div>
     <label class="f">Season ends (optional)</label>
     <input type="date" name="season_end" value="{{ s.season_end }}">
@@ -30,4 +33,13 @@
     <button class="full">Finish setup</button>
   </form>
 </div>
+<script>
+// Pre-select the time zone of the browser doing the setup.
+(function () {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone, sel = document.getElementById('tz');
+    if (tz && sel.value === 'UTC' && [].some.call(sel.options, function (o) { return o.value === tz; })) sel.value = tz;
+  } catch (e) {}
+})();
+</script>
 {% endblock %}

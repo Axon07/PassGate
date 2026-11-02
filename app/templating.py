@@ -1,4 +1,5 @@
 import os
+from zoneinfo import available_timezones
 
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -12,6 +13,12 @@ STATIC_DIR = os.path.join(HERE, "static")
 env = Environment(loader=FileSystemLoader(os.path.join(HERE, "templates")),
                   autoescape=select_autoescape(["html"]))
 env.globals.update(money=money, fmt_ts=fmt_ts, remaining=remaining, describe_term=describe_term)
+
+# IANA time zones for the dropdowns (region/city names plus UTC; skips legacy aliases)
+TIMEZONES = sorted(z for z in available_timezones()
+                   if "/" in z and z.split("/")[0] in {"Africa", "America", "Antarctica", "Asia", "Atlantic",
+                                                       "Australia", "Europe", "Indian", "Pacific"}) + ["UTC"]
+env.globals["timezones"] = TIMEZONES
 
 
 def _register_extras():

@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import access, billing, db
 from .gateway import get_driver, speed_tiers, valid_mac
-from .templating import STATIC_DIR, render
+from .templating import STATIC_DIR, TIMEZONES, render
 from .util import check_pw, hash_pw, ip_in
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -21,7 +21,7 @@ SETTING_FIELDS = [
     ("welcome_text", "Welcome message", "textarea", ""),
     ("support_text", "Help / contact line", "text", "e.g. Questions? Ask at the front office."),
     ("currency", "Currency", "text", "Three-letter code: cad, usd, eur…"),
-    ("timezone", "Time zone", "text", "e.g. America/Winnipeg"),
+    ("timezone", "Time zone", "tz", "Used for pass end times and the season end date."),
     ("season_end", "Season ends", "date", "Subscriptions stop billing after this day. Blank = no end."),
     ("portal_url", "Portal address", "text", "What guests get sent to, e.g. http://wifi.lake.lan. "
                                               "Use a hostname, not a bare IP — Stripe prefers it."),
@@ -106,6 +106,8 @@ async def setup_save(request: Request):
     if len(pw) < 8 or pw != f.get("admin_password2"):
         return render("admin/setup.html", request=request, s={**db.all_settings(), **f},
                       err="Admin password must be at least 8 characters and match.")
+    if f.get("timezone") not in TIMEZONES:
+        f = {**f, "timezone": "UTC"}
     for key in ("site_name", "currency", "timezone", "season_end", "portal_url", "guest_subnet",
                 "stripe_secret_key"):
         if key in f:
@@ -297,6 +299,8 @@ async def settings_save(request: Request):
             continue  # blank = keep existing secret
         if kind == "secret" and val == "-":
             val = ""  # "-" clears it
+        if kind == "tz" and val not in TIMEZONES:
+            continue
         db.set(key, val)
     if f.get("new_admin_password"):
         if len(f["new_admin_password"]) >= 8:

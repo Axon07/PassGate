@@ -173,7 +173,7 @@ DEFAULTS = {
     "site_name": "Lake Wi-Fi",
     "welcome_text": "Get online at the lake. Pick a pass, pay with card, and you're connected.",
     "currency": "cad",
-    "timezone": "America/Winnipeg",
+    "timezone": os.environ.get("TZ") or "UTC",  # setup wizard pre-selects the browser's zone
     "season_end": "",                 # YYYY-MM-DD, local time end of day
     "portal_url": "",                 # e.g. http://wifi.lake.lan  (what guests are redirected to)
     "guest_subnet": "10.50.0.0/22",

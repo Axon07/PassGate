@@ -12,6 +12,10 @@
       {% elif kind == 'secret' %}
         <input id="{{ key }}" type="password" name="{{ key }}" autocomplete="off"
                placeholder="{{ '•••••••• saved — leave blank to keep, type - to clear' if s[key] else 'not set' }}">
+      {% elif kind == 'tz' %}
+        <select id="{{ key }}" name="{{ key }}">
+          {% for z in timezones %}<option value="{{ z }}" {{ 'selected' if s[key] == z }}>{{ z.replace('_', ' ') }}</option>{% endfor %}
+        </select>
       {% elif kind.startswith('select:') %}
         <select id="{{ key }}" name="{{ key }}">
           {% for opt in kind[7:].split('|') %}{% set v, l = opt.split('=', 1) %}

@@ -129,7 +129,7 @@ def test_03_first_run_setup():
     page = c.get("/setup")
     tok = csrf(page)
     r = c.post("/setup", data={"csrf": tok, "site_name": "Test Lake", "currency": "cad",
-                               "timezone": "America/Winnipeg", "season_end": "",
+                               "timezone": "America/Toronto", "season_end": "",
                                "portal_url": "http://testserver", "guest_subnet": "10.50.0.0/22",
                                "stripe_secret_key": "sk_test_x", "admin_password": "hunter2hunter2",
                                "admin_password2": "hunter2hunter2"})
