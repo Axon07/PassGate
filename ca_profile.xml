@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<CommunityApplications>
+  <Profile>
+    PassGate is a self-hosted captive portal that sells Wi-Fi passes through Stripe, for campgrounds, lakes, cabins, RV parks and marinas. Guests join your open Wi-Fi, pick a day, weekend or monthly pass, pay by card and are online right away. It runs as one small container alongside an OPNsense or OpenWrt router. For help, bug reports and feature requests, open an issue on GitHub.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/Axon07/Passgate/main/docs/icon.png</Icon>
+  <WebPage>https://github.com/Axon07/Passgate</WebPage>
+</CommunityApplications>
