@@ -1,0 +1,51 @@
+{% extends "admin/base.html" %}
+{% set page = 'vouchers' %}
+{% block body %}
+<div class="card" style="max-width:720px">
+  <h2>Make vouchers</h2>
+  <p class="muted" style="margin-top:-4px">Codes you hand out yourself: a comp for a neighbour, Wi-Fi with a campsite booking,
+    pre-paid cards sold at the store. Guests enter the code on the sign-in page under <em>Have a voucher or a join code?</em>,
+    with no account or card. The time starts when a code is first used.</p>
+  <form method="post" action="/vouchers">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f">Name</label>
+    <input type="text" name="name" placeholder="Campsite bookings, July" maxlength="60" required>
+    <div class="row">
+      <div><label class="f">How many codes</label><input type="number" name="count" min="1" max="500" value="10" required></div>
+      <div><label class="f">Each lasts</label>
+        <div class="row" style="gap:6px"><input type="number" name="amount" min="1" step="any" value="1" required>
+          <select name="unit"><option value="hours">hours</option><option value="days" selected>days</option>
+            <option value="minutes">minutes</option></select></div></div>
+    </div>
+    <div class="row">
+      <div><label class="f">Devices per code</label><input type="number" name="devices" min="1" max="20" value="1"></div>
+      <div><label class="f">Use by (optional)</label><input type="date" name="use_by"></div>
+    </div>
+    <div class="help">Unused codes stop working after the use-by date. Codes already in use keep running until their time is up.</div>
+    {% if tiers %}
+    <label class="f">Speed tier</label>
+    <select name="speed_tier"><option value="">No tier (default speed)</option>
+      {% for name, alias in tiers %}<option value="{{ name }}">{{ name }}</option>{% endfor %}</select>
+    {% endif %}
+    <label class="f">Note printed on each voucher (optional)</label>
+    <input type="text" name="note" maxlength="200" placeholder="Thanks for staying with us!">
+    <button style="margin-top:14px">Make vouchers</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Batches</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Name</th><th>Each lasts</th><th>Devices</th><th>Use by</th><th>Unused</th><th>In use</th><th>Used up</th><th></th></tr>
+    {% for x in batches %}
+    <tr><td><strong>{{ x.b.name }}</strong><div class="help">made {{ fmt_ts(x.b.created_at) }}</div></td>
+      <td>{{ describe(x.b.duration_minutes) }}</td><td>{{ x.b.max_devices }}</td>
+      <td>{{ fmt_ts(x.b.use_by) if x.b.use_by else '—' }}</td>
+      <td>{{ x.counts.unused }}{% if x.counts.expired %}<div class="help">{{ x.counts.expired }} expired</div>{% endif %}</td>
+      <td>{{ x.counts.active }}</td>
+      <td>{{ x.counts.used }}{% if x.counts.revoked %}<div class="help">{{ x.counts.revoked }} cancelled</div>{% endif %}</td>
+      <td><a href="/vouchers/{{ x.b.id }}">Open</a></td></tr>
+    {% else %}<tr><td colspan="8" class="muted">No vouchers yet.</td></tr>{% endfor %}
+  </table></div>
+</div>
+{% endblock %}

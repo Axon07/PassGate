@@ -853,3 +853,68 @@ def test_31_free_basic_tier():
     assert not freetier.enabled() and slow() == set() and "10.50.9.22" not in allowed()
     assert db.get("free_cleanup_alias") == ""
     assert "Use free basic Wi-Fi" not in c2.get("/").text
+
+
+# ---- vouchers ----------------------------------------------------------------------
+
+def test_32_vouchers():
+    from app import vouchers
+    adm = _admin()
+    page = adm.get("/vouchers")
+    assert page.status_code == 200 and "Make vouchers" in page.text
+    r = adm.post("/vouchers", data={"csrf": csrf(page), "name": "Campsite July", "count": "3", "amount": "2",
+                                    "unit": "hours", "devices": "2", "use_by": "", "note": "Thanks for staying!"})
+    bid = int(r.headers["location"].split("/")[2].split("?")[0])
+    b, rows = vouchers.batch_codes(bid)
+    assert b["duration_minutes"] == 120 and len(rows) == 3 and all(x["state"] == "unused" for x in rows)
+    code = rows[0]["v"]["code"]
+    assert re.fullmatch(r"[A-Z2-9]{4}-[A-Z2-9]{4}", code)
+    # printable sheet and CSV
+    sheet = adm.get(f"/vouchers/{bid}/print").text
+    assert sheet.count('class="code"') == 3 and code in sheet and "Thanks for staying!" in sheet and "2 hours" in sheet
+    assert code in adm.get(f"/vouchers/{bid}/codes.csv").text
+    # a guest enters it (lower case, no dash is fine): online, no account
+    c = guest("10.50.10.1", "a0:00:00:00:00:01")
+    assert "Have a voucher or a join code?" in c.get("/").text
+    r = c.post("/join", data={"code": code.replace("-", "").lower()})
+    assert "You're in!" in r.text.replace("&#39;", "'") and code in r.text and "1 of 2 devices" in r.text
+    assert "10.50.10.1" in allowed()
+    assert "With voucher" in c.get("/").text                      # status page, never an account page
+    assert c.get("/account").status_code == 303
+    v = db.one("SELECT * FROM vouchers WHERE code=?", (code,))
+    pass_ = db.one("SELECT * FROM passes WHERE user_id=?", (v["user_id"],))
+    assert pass_["ends_at"] - pass_["starts_at"] == 7200 and pass_["source"] == "voucher"
+    # voucher accounts stay out of the guest list
+    assert "vouchers.invalid" not in adm.get("/guests").text
+    # a second device with the same code; a third is refused
+    c2 = guest("10.50.10.2", "a0:00:00:00:00:02")
+    assert "2 of 2 devices" in c2.post("/join", data={"code": code}).text
+    c3 = guest("10.50.10.3", "a0:00:00:00:00:03")
+    assert "as many devices as it covers" in c3.post("/join", data={"code": code}).text
+    assert "10.50.10.3" not in allowed()
+    # wrong code
+    assert "didn't work" in c3.post("/join", data={"code": "ZZZZ-ZZZZ"}).text.replace("&#39;", "'")
+    # used up when the time is over
+    db.run("UPDATE passes SET ends_at=? WHERE id=?", (db.now() - 1, pass_["id"]))
+    access.sync()
+    assert "10.50.10.1" not in allowed()
+    assert "used up" in c.post("/join", data={"code": code}).text
+    # cancel an unused one, then it's refused
+    code2 = rows[1]["v"]["code"]
+    page = adm.get(f"/vouchers/{bid}")
+    assert "In use" not in page.text and "Used up" in page.text
+    adm.post(f"/vouchers/{bid}", data={"csrf": csrf(page), "action": "revoke", "voucher_id": rows[1]["v"]["id"]})
+    assert "cancelled" in c3.post("/join", data={"code": code2}).text
+    # use-by date in the past: unused codes are refused
+    page = adm.get("/vouchers")
+    r = adm.post("/vouchers", data={"csrf": csrf(page), "name": "Old", "count": "1", "amount": "1",
+                                    "unit": "days", "devices": "1", "use_by": "2020-01-01"})
+    bid2 = int(r.headers["location"].split("/")[2].split("?")[0])
+    old = vouchers.batch_codes(bid2)[1][0]["v"]["code"]
+    assert "use-by date" in c3.post("/join", data={"code": old}).text
+    # delete unused: the old batch disappears entirely
+    page = adm.get(f"/vouchers/{bid2}")
+    assert adm.post(f"/vouchers/{bid2}", data={"csrf": csrf(page), "action": "delete_unused"}).headers["location"] \
+        == "/vouchers?msg=Batch+deleted"
+    # join codes still work through the same box (6 characters)
+    assert vouchers.looks_like_voucher("ABCD-EFGH") and not vouchers.looks_like_voucher("ABC-DEF")

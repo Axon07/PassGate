@@ -97,13 +97,14 @@
 </div>
 <div class="card">
   <details {% if show_join %}open{% endif %}>
-    <summary>Have a join code from family or a friend?</summary>
-    <p class="help">Someone with a pass can make a code on their account page so this device can use one of their device slots.</p>
+    <summary>Have a voucher or a join code?</summary>
+    <p class="help">Enter a Wi-Fi voucher, or a join code someone made on their account page so this device can use
+      one of their device slots.</p>
     <form method="post" action="/join">
-      <label class="f" for="jc">Join code</label>
-      <input id="jc" type="text" name="code" placeholder="ABC-123" autocomplete="off" autocapitalize="characters" required
+      <label class="f" for="jc">Code</label>
+      <input id="jc" type="text" name="code" placeholder="ABCD-EFGH" autocomplete="off" autocapitalize="characters" required
              style="text-transform:uppercase;letter-spacing:.1em">
-      <button class="full" type="submit">Join</button>
+      <button class="full" type="submit">Connect</button>
     </form>
   </details>
 </div>

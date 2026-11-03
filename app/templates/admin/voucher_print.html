@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ b.name }} · vouchers</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 16px; color: #1d2b28; background: #fff; }
+  .bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+  .bar button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 0; background: #1f6f66; color: #fff; cursor: pointer; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88mm, 1fr)); gap: 6mm; }
+  .v { border: 1.5px dashed #8aa39e; border-radius: 10px; padding: 5mm 6mm; break-inside: avoid; }
+  .site { font-weight: 750; font-size: 15pt; }
+  .what { color: #5b6d69; font-size: 9.5pt; margin-top: 1mm; }
+  .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 22pt; font-weight: 800; letter-spacing: .12em;
+          margin: 3mm 0; padding: 2mm 0; text-align: center; background: #f1f4f2; border-radius: 6px; }
+  .how { font-size: 9pt; line-height: 1.35; color: #33433f; }
+  .note { font-size: 9pt; margin-top: 2mm; font-style: italic; }
+  @media print { .bar { display: none; } body { padding: 0; } @page { margin: 10mm; } }
+</style>
+</head>
+<body>
+<div class="bar"><button onclick="window.print()">Print</button>
+  <span>{{ rows|length }} unused voucher{{ 's' if rows|length != 1 }} · {{ b.name }}</span></div>
+<div class="grid">
+{% for r in rows %}
+  <div class="v">
+    <div class="site">{{ site_name }} Wi-Fi</div>
+    <div class="what">Voucher · {{ describe(b.duration_minutes) }} from first use · {{ b.max_devices }} device{{ 's' if b.max_devices != 1 }}{% if b.use_by %} · use by {{ fmt_ts(b.use_by).split(',')[0] }}{% endif %}</div>
+    <div class="code">{{ r.v.code }}</div>
+    <div class="how">Join the Wi-Fi and the sign-in page opens{% if host %} (or go to <b>{{ host }}</b>){% endif %}.
+      Tap <b>Have a voucher or a join code?</b> and enter this code.{% if b.max_devices > 1 %} Use the same code on each device.{% endif %}</div>
+    {% if b.note %}<div class="note">{{ b.note }}</div>{% endif %}
+  </div>
+{% else %}
+  <p>No unused vouchers in this batch.</p>
+{% endfor %}
+</div>
+</body>
+</html>

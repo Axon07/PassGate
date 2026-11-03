@@ -29,7 +29,7 @@ A captive portal for campgrounds, lakes, cabins, RV parks, marinas, and anywhere
 
 ---
 
-Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weekend or monthly pass**, pay by card, and they're online. **No vouchers to hand out and nobody has to be on site.** Money goes straight to your Stripe account with no platform fee, and everything runs in one small Docker container next to your **OPNsense** or **OpenWrt** router.
+Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weekend or monthly pass**, pay by card, and they're online. **Nobody has to be on site or hand out codes**, though you can print vouchers when you want to. Money goes straight to your Stripe account with no platform fee, and everything runs in one small Docker container next to your **OPNsense** or **OpenWrt** router.
 
 ## ✨ Features
 
@@ -42,6 +42,7 @@ Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weeken
 - **Passes stack:** a day pass bought on top of a weekend pass adds time
 - **Extra device slots** at checkout or later, **prorated** for the time left
 - **Optional volume discount:** percent or dollar amount off each further slot
+- **Vouchers** when you want them: printable codes for comps, bookings or pre-paid cards, timed from first use, with a use-by date and several devices per code
 - **Free basic tier:** an always-available slow connection for messages and email, optionally a few minutes a day, with your passes as the upgrade
 - **Free promotions:** open it up for a long weekend with a one-tap "Connect free" button and your own message, then a thank-you note pointing to the paid plans
 - Refunds and cancellations from your Stripe dashboard are picked up automatically
@@ -232,6 +233,19 @@ Admin → **HTTPS** → *Free certificate from Let's Encrypt*: enter a name in a
 Admin → *Promotions*. Set a start and end time, a headline and a message (for example *"Free Wi-Fi this long weekend! Like it? The monthly plan is $25"*). During the promotion the sign-in page shows a **Connect free** button: one tap, no account or card, online until the promotion ends. Paid plans are shown right underneath, and paying guests aren't affected.
 
 When it ends (or you press *End it now*), free devices go back to the sign-in page, which shows them your thank-you note for a set number of days. Setting new dates starts a fresh promotion. Consider a per-device speed cap on your router before a busy free weekend.
+
+</details>
+
+<details>
+<summary><b>🎟️ Vouchers</b></summary>
+
+For access you hand out yourself: a comp for a neighbour, Wi-Fi included with a campsite booking, a prize, or pre-paid cards sold at the store. Admin → **Vouchers** → *Make vouchers*: a name, how many codes (up to 500), how long each lasts, devices per code, and an optional use-by date, speed tier and printed note.
+
+- **Codes** look like `JBJ7-ZPUS`: no look-alike characters, and case and dashes don't matter.
+- **Guests** enter them on the sign-in page under *Have a voucher or a join code?*. There's no account or card. The time starts at first use, and with a multi-device voucher, each device enters the same code.
+- **Print** a sheet of cut-out cards with your network name, the code and short instructions, or **download a CSV**.
+- **Track** each code: unused, in use (and until when), used up, expired or cancelled. Cancel a single code or a whole batch, or delete unused codes.
+- Wrong codes are rate-limited per device, just like join codes. Vouchers never show up in the guest list or revenue figures.
 
 </details>
 

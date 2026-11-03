@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from datetime import datetime
 
-from . import access, billing, db, freetier, promo, tls
+from . import access, billing, db, freetier, promo, tls, vouchers
 from .gateway import get_driver, speed_tiers, valid_mac
 from .templating import STATIC_DIR, TIMEZONES, render
 from .util import check_pw, fmt_ts, hash_pw, ip_in, tz
@@ -364,7 +364,7 @@ def guests(request: Request, q: str = ""):
         SELECT u.*, (SELECT MAX(ends_at) FROM passes p WHERE p.user_id=u.id AND p.status='active'
                      AND p.starts_at<=? AND p.ends_at>?) AS until,
                (SELECT COUNT(*) FROM devices d WHERE d.user_id=u.id) AS ndev
-        FROM users u WHERE u.email LIKE ? ORDER BY until IS NULL, until DESC, u.created_at DESC LIMIT 300""",
+        FROM users u WHERE u.email LIKE ? AND u.voucher_id IS NULL ORDER BY until IS NULL, until DESC, u.created_at DESC LIMIT 300""",
                 (t, t, f"%{q.strip().lower()}%"))
     return render("admin/guests.html", request=request, users=rows, q=q,
                   plans=db.q("SELECT * FROM plans ORDER BY sort, id"))
@@ -636,6 +636,100 @@ async def promo_save(request: Request):
             msg = "Saved, but the end must be after the start, so the promotion won't run."
     access.sync()
     return RedirectResponse("/promo?msg=" + msg.replace(" ", "+"), status_code=303)
+
+
+# ---- vouchers ------------------------------------------------------------------
+
+@app.get("/vouchers", response_class=HTMLResponse)
+def vouchers_page(request: Request, msg: str = ""):
+    if (r := guard(request)):
+        return r
+    return render("admin/vouchers.html", request=request, batches=vouchers.batches(), msg=msg,
+                  tiers=speed_tiers(), describe=vouchers.describe_minutes)
+
+
+@app.post("/vouchers")
+async def vouchers_create(request: Request):
+    if (r := guard(request)):
+        return r
+    f = await request.form()
+    if not csrf_ok(request, f.get("csrf", "")):
+        return RedirectResponse("/vouchers", status_code=303)
+    try:
+        count, amount, devices = int(f.get("count") or 0), float(f.get("amount") or 0), int(f.get("devices") or 1)
+    except ValueError:
+        return RedirectResponse("/vouchers?msg=Check+the+numbers", status_code=303)
+    unit = {"minutes": 1, "hours": 60, "days": 1440}.get(f.get("unit"), 60)
+    minutes = int(round(amount * unit))
+    if count < 1 or minutes < 1:
+        return RedirectResponse("/vouchers?msg=Enter+how+many+codes+and+how+long+they+last", status_code=303)
+    tier = f.get("speed_tier", "")
+    if tier and tier not in {n for n, _ in speed_tiers()}:
+        tier = ""
+    bid = vouchers.create_batch(f.get("name", ""), count, minutes, devices,
+                                vouchers.use_by_ts(f.get("use_by", "")), tier, f.get("note", ""))
+    return RedirectResponse(f"/vouchers/{bid}?msg=Created", status_code=303)
+
+
+@app.get("/vouchers/{bid}", response_class=HTMLResponse)
+def voucher_batch(request: Request, bid: int, msg: str = ""):
+    if (r := guard(request)):
+        return r
+    b, rows = vouchers.batch_codes(bid)
+    if not b:
+        return RedirectResponse("/vouchers", status_code=303)
+    return render("admin/voucher_batch.html", request=request, b=b, rows=rows, msg=msg,
+                  describe=vouchers.describe_minutes)
+
+
+@app.post("/vouchers/{bid}")
+async def voucher_batch_action(request: Request, bid: int):
+    if (r := guard(request)):
+        return r
+    f = await request.form()
+    if not csrf_ok(request, f.get("csrf", "")):
+        return RedirectResponse(f"/vouchers/{bid}", status_code=303)
+    action = f.get("action")
+    if action == "revoke":
+        vid = int(f.get("voucher_id") or 0)
+        if db.one("SELECT id FROM vouchers WHERE id=? AND batch_id=?", (vid, bid)):
+            vouchers.revoke(vid)
+        msg = "Voucher cancelled. Its devices go offline within 30 seconds."
+    elif action == "revoke_all":
+        for v in db.q("SELECT id FROM vouchers WHERE batch_id=? AND revoked=0", (bid,)):
+            vouchers.revoke(v["id"])
+        msg = "All vouchers in this batch cancelled."
+    elif action == "delete_unused":
+        n = vouchers.delete_unused(bid)
+        access.sync()
+        if not db.one("SELECT id FROM voucher_batches WHERE id=?", (bid,)):
+            return RedirectResponse("/vouchers?msg=Batch+deleted", status_code=303)
+        msg = f"Deleted {n} unused codes."
+    else:
+        msg = ""
+    access.sync()
+    return RedirectResponse(f"/vouchers/{bid}?msg=" + msg.replace(" ", "+"), status_code=303)
+
+
+@app.get("/vouchers/{bid}/print", response_class=HTMLResponse)
+def voucher_print(request: Request, bid: int, all: int = 0):  # noqa: A002
+    if (r := guard(request)):
+        return r
+    b, rows = vouchers.batch_codes(bid)
+    if not b:
+        return RedirectResponse("/vouchers", status_code=303)
+    rows = [x for x in rows if all or x["state"] == "unused"]
+    host = (tls.portal_url() or "").split("://")[-1].strip("/")
+    return render("admin/voucher_print.html", request=request, b=b, rows=rows, host=host,
+                  describe=vouchers.describe_minutes)
+
+
+@app.get("/vouchers/{bid}/codes.csv")
+def voucher_csv(request: Request, bid: int):
+    if (r := guard(request)):
+        return r
+    return PlainTextResponse(vouchers.to_csv(bid), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="vouchers-{bid}.csv"'})
 
 
 # ---- always-online (bypass) list ---------------------------------------------

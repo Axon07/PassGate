@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+{% if fresh %}<div class="note ok">You're in! This device is now connected.</div>{% endif %}
+<div class="card">
+  <div class="status"><span class="dot on"></span><span class="big">Online</span>
+    {% if until %}<span class="muted">{{ remaining(until) }}</span>{% endif %}</div>
+  <p class="muted" style="margin:6px 0 0">With voucher <code>{{ v.code }}</code>{% if until %}, until {{ fmt_ts(until) }}{% endif %}.</p>
+  {% if limit > 1 %}
+  <p class="help">{{ ndev }} of {{ limit }} devices connected.{% if ndev < limit %} To connect another one, enter the same
+    code on its sign-in page.{% endif %}</p>
+  {% endif %}
+</div>
+<p class="help">Want more time or full control of your devices? <a href="/?buy=1">See the passes</a>.</p>
+{% endblock %}

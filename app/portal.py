@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import access, billing, db
 from . import extras as xs
-from . import freetier, promo, tls
+from . import freetier, promo, tls, vouchers
 from .templating import STATIC_DIR, render
 from .gateway import valid_mac
 from .util import check_pw, hash_pw
@@ -30,7 +30,8 @@ def current_user(request: Request):
     uid = request.session.get("uid")
     if not uid:
         return None
-    return db.one("SELECT * FROM users WHERE id=? AND disabled=0", (uid,))
+    # Voucher accounts are hidden: nobody can be logged in as one.
+    return db.one("SELECT * FROM users WHERE id=? AND disabled=0 AND voucher_id IS NULL", (uid,))
 
 
 @app.middleware("http")
@@ -65,14 +66,17 @@ def plans():
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, msg: str = "", err: str = ""):
+def home(request: Request, msg: str = "", err: str = "", buy: int = 0):
     user = current_user(request)
     ip = client_ip(request)
     mac, device_owner = access.identify(ip)
     if user:
         return RedirectResponse("/account", status_code=303)
-    if device_owner and access.has_access(device_owner):
+    if device_owner and access.has_access(device_owner) and not buy:
         dev = db.one("SELECT * FROM devices WHERE mac=?", (mac,))
+        v = vouchers.owner_voucher(device_owner)
+        if v:
+            return _voucher_page(device_owner, v)
         if dev and dev["source"] == "invite":
             # Joined with a code (e.g. a kid's phone): show status only, never
             # the parent's account, billing or password.
@@ -148,14 +152,35 @@ def _joined_page(owner_id, dev, fresh=False):
     return render("joined.html", owner=masked, until=access.access_until(owner_id), dev=dev, fresh=fresh)
 
 
+def _voucher_page(uid, v, fresh=False):
+    n = db.one("SELECT COUNT(*) n FROM devices WHERE user_id=?", (uid,))["n"]
+    return render("voucher.html", v=v, until=access.access_until(uid), ndev=n,
+                  limit=access.device_limit(uid), fresh=fresh)
+
+
 @app.post("/join")
 def join(request: Request, code: str = Form(...)):
-    """A device joins someone else's account with a code they made."""
+    """A code typed on the sign-in page: a voucher, or a join code someone
+    made on their account."""
     ip = client_ip(request)
     mac = access.identify(ip)[0]
     if not mac:
         return render("home.html", request=request, plans=plans(), xs=xs, show_join=True,
                       err="Couldn't identify this device. Reconnect to the Wi-Fi and try again.")
+    if vouchers.looks_like_voucher(code):
+        ok, res = vouchers.redeem(code, mac, ip, client=mac)
+        if ok:
+            request.session.clear()
+            access.sync()
+            return _voucher_page(res, vouchers.owner_voucher(res), fresh=True)
+        err = {"bad_code": "That code didn't work. Check it and try again.",
+               "slow_down": "Too many wrong codes. Wait a while and try again.",
+               "expired": "That voucher is past its use-by date.",
+               "used": "That voucher has been used up.",
+               "revoked": "That voucher has been cancelled.",
+               "limit": "That voucher is already in use on as many devices as it covers."}.get(
+            res, "Couldn't connect with that voucher.")
+        return render("home.html", request=request, plans=plans(), xs=xs, show_join=True, err=err)
     ok, res = access.redeem_invite(code, mac, ip, client=mac)
     if ok:
         request.session.clear()  # this device isn't logged in to the owner's account

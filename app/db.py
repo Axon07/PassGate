@@ -99,6 +99,25 @@ CREATE TABLE IF NOT EXISTS free_devices (
     started_at INTEGER NOT NULL,
     expires_at INTEGER                 -- NULL = no time limit
 );
+CREATE TABLE IF NOT EXISTS voucher_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    duration_minutes INTEGER NOT NULL,   -- from first use
+    max_devices INTEGER NOT NULL DEFAULT 1,
+    use_by INTEGER,                      -- unused codes stop working after this (NULL = never)
+    speed_tier TEXT DEFAULT '',
+    note TEXT DEFAULT '',
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS vouchers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL REFERENCES voucher_batches(id),
+    code TEXT NOT NULL UNIQUE,
+    user_id INTEGER REFERENCES users(id),  -- hidden account, made at first use
+    redeemed_at INTEGER,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS invites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT NOT NULL UNIQUE,
@@ -134,7 +153,8 @@ MIGRATIONS = [
     ("passes", "speed_tier", "TEXT DEFAULT ''"),
     ("users", "device_limit_override", "INTEGER"),
     ("users", "last_swap_at", "INTEGER"),
-    ("devices", "source", "TEXT DEFAULT 'auto'"),   # auto | manual (typed MAC) | invite (join code)
+    ("devices", "source", "TEXT DEFAULT 'auto'"),   # auto | manual (typed MAC) | invite (join code) | voucher
+    ("users", "voucher_id", "INTEGER"),             # set on the hidden accounts behind vouchers
     # paid extra device slots
     ("plans", "extra_device_cents", "INTEGER DEFAULT 0"),      # 0 = extras not sold on this plan
     ("plans", "max_extra_devices", "INTEGER DEFAULT 3"),

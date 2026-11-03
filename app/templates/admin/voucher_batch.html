@@ -1,0 +1,42 @@
+{% extends "admin/base.html" %}
+{% set page = 'vouchers' %}
+{% block body %}
+<div class="card">
+  <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <div><h2 style="margin:0">{{ b.name }}</h2>
+      <p class="muted" style="margin:4px 0 0">Each code: {{ describe(b.duration_minutes) }} from first use · {{ b.max_devices }}
+        device{{ 's' if b.max_devices != 1 }}{% if b.use_by %} · use by {{ fmt_ts(b.use_by) }}{% endif %}{% if b.speed_tier %} · {{ b.speed_tier }} speed{% endif %}</p></div>
+    <div class="row" style="flex:none;gap:8px">
+      <a class="btn small" style="flex:none;padding:8px 12px" href="/vouchers/{{ b.id }}/print" target="_blank">Print unused</a>
+      <a class="btn small ghost" style="flex:none;padding:8px 12px" href="/vouchers/{{ b.id }}/codes.csv">Download CSV</a>
+    </div>
+  </div>
+  <div class="tablewrap" style="margin-top:14px"><table>
+    <tr><th>Code</th><th>Status</th><th>First used</th><th>Until</th><th>Devices</th><th></th></tr>
+    {% for r in rows %}
+    <tr><td><code style="font-size:1rem">{{ r.v.code }}</code></td>
+      <td>{% if r.state == 'active' %}<span class="pill" style="background:var(--ok-bg);color:var(--ok)">In use</span>
+        {% elif r.state == 'unused' %}<span class="pill">Unused</span>
+        {% elif r.state == 'used' %}<span class="pill">Used up</span>
+        {% elif r.state == 'expired' %}<span class="pill">Expired</span>
+        {% else %}<span class="pill" style="color:var(--err)">Cancelled</span>{% endif %}</td>
+      <td>{{ fmt_ts(r.v.redeemed_at) if r.v.redeemed_at else '—' }}</td>
+      <td>{{ fmt_ts(r.until) if r.until else '—' }}</td>
+      <td>{{ r.devices if r.v.user_id else '—' }}</td>
+      <td>{% if r.state in ('unused', 'active') %}
+        <form method="post" action="/vouchers/{{ b.id }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="voucher_id" value="{{ r.v.id }}">
+          <button class="ghost small" name="action" value="revoke" onclick="return confirm('Cancel {{ r.v.code }}?')">Cancel</button></form>
+        {% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  <form method="post" action="/vouchers/{{ b.id }}" class="row" style="margin-top:14px;gap:8px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost" style="flex:none" name="action" value="delete_unused"
+      onclick="return confirm('Delete all unused codes in this batch? Printed copies stop working.')">Delete unused codes</button>
+    <button class="danger" style="flex:none" name="action" value="revoke_all"
+      onclick="return confirm('Cancel every code in this batch, including ones in use?')">Cancel all</button>
+  </form>
+</div>
+<p><a href="/vouchers">← All vouchers</a></p>
+{% endblock %}
