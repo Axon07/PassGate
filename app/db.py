@@ -91,6 +91,14 @@ CREATE TABLE IF NOT EXISTS promo_devices (
     ip TEXT,
     claimed_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS free_devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mac TEXT NOT NULL UNIQUE,
+    ip TEXT,
+    day TEXT NOT NULL,                 -- local date of the last claim
+    started_at INTEGER NOT NULL,
+    expires_at INTEGER                 -- NULL = no time limit
+);
 CREATE TABLE IF NOT EXISTS invites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT NOT NULL UNIQUE,

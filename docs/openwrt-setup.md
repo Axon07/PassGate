@@ -119,6 +119,7 @@ If your zones aren't called `guest`, `lan` and `wan`, add `GUEST_ZONE=...`, `POR
 | rpcd login `passgate` | can run that helper and nothing else; it can't log in to LuCI or change any other setting |
 | `/etc/sysupgrade.conf` | keeps the helper through firmware upgrades |
 | dnsmasq | `PORTAL_HOST` → PassGate's IP, if you set it |
+| Free tier | a `free_clients` set and `/etc/nftables.d/50-passgate-free.nft`, which limits each device in it (only used if you turn the free tier on) |
 
 To undo it all: `sh /tmp/passgate-setup.sh remove` (download it again first if the router rebooted).
 
@@ -152,7 +153,13 @@ isolation on**.
 
 ## 7. Speed limits
 
-Speeds are enforced by the router, since guest traffic never passes through PassGate. On OpenWrt, a
+Speeds are enforced by the router, since guest traffic never passes through PassGate.
+
+**Free basic tier.** The setup script already adds a `free_clients` set with a per-device limit of
+2 Mbit/s down and 1 Mbit/s up. To change it, run the script again with e.g. `FREE_DOWN=1 FREE_UP=0.5`
+added before `sh`. Then turn the tier on in *Admin → Free Wi-Fi*. Paying guests are never put in that set.
+
+**Everyone else.** A
 simple per-device cap for the whole guest network can be set with the **nft-qos** package
 (`luci-app-nft-qos`, *Network → QoS over Nftables*, static limit for `10.50.0.0/22`). PassGate's
 per-plan *speed tiers* aren't wired up for OpenWrt yet: PassGate will fill extra sets if you list them,

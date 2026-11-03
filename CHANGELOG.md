@@ -4,6 +4,7 @@
 
 **New**
 - **OpenWrt support.** PassGate can now control an OpenWrt router (22.03 or newer) as well as OPNsense. One script on the router (`openwrt/setup.sh`) adds the allow-list, firewall rules and a login that can only change that list. Choose *Router: OpenWrt* in Settings. Guide: `docs/openwrt-setup.md`.
+- **Free basic tier.** Offer a slow, always-available connection with one tap and no account (optionally limited to some minutes per device per day), with the paid plans as the upgrade. Free devices also go in a `free_clients` router list that the router slows down: OpenWrt's setup script creates the limit (default 2 Mbit/s down, 1 up); for OPNsense the guide shows two shaper rules. The *Promotions* admin page is now *Free Wi-Fi* and holds both.
 - Settings only show the connection fields for the router you picked.
 
 ## v0.2.0

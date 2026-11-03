@@ -42,6 +42,7 @@ Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weeken
 - **Passes stack:** a day pass bought on top of a weekend pass adds time
 - **Extra device slots** at checkout or later, **prorated** for the time left
 - **Optional volume discount:** percent or dollar amount off each further slot
+- **Free basic tier:** an always-available slow connection for messages and email, optionally a few minutes a day, with your passes as the upgrade
 - **Free promotions:** open it up for a long weekend with a one-tap "Connect free" button and your own message, then a thank-you note pointing to the paid plans
 - Refunds and cancellations from your Stripe dashboard are picked up automatically
 
@@ -231,6 +232,17 @@ Admin → **HTTPS** → *Free certificate from Let's Encrypt*: enter a name in a
 Admin → *Promotions*. Set a start and end time, a headline and a message (for example *"Free Wi-Fi this long weekend! Like it? The monthly plan is $25"*). During the promotion the sign-in page shows a **Connect free** button: one tap, no account or card, online until the promotion ends. Paid plans are shown right underneath, and paying guests aren't affected.
 
 When it ends (or you press *End it now*), free devices go back to the sign-in page, which shows them your thank-you note for a set number of days. Setting new dates starts a fresh promotion. Consider a per-device speed cap on your router before a busy free weekend.
+
+</details>
+
+<details>
+<summary><b>🆓 Free basic tier</b></summary>
+
+Admin → *Free Wi-Fi* → *Free basic tier*. The sign-in page then offers **Use free basic Wi-Fi** next to the paid plans: one tap, no account or card. Optionally limit it to a number of minutes per device per day (it resets at midnight).
+
+Free devices go into the normal allow-list **and** a second router list (`free_clients`) that your router holds to a low speed, e.g. 2 Mbit/s. On OpenWrt the setup script creates that limit for you. On OPNsense it's two shaper rules ([guide](docs/opnsense-setup.md#8-speed-limits-optional-recommended)). A device that buys a pass, is on the always-online list, or is in the middle of paying always gets full speed.
+
+The daily limit is per device, and someone determined can change their device's MAC address to get more. That's why the tier should be slow rather than relied on as a hard cap.
 
 </details>
 

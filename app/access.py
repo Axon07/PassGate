@@ -282,12 +282,24 @@ def wanted() -> dict[str, set[str]]:
             out[base].add(ip)
     for g in db.q("SELECT * FROM temp_grants WHERE expires_at>?", (t,)):
         out[base].add(mac_to_ip.get(g["mac"], g["ip"]))
-    from . import promo
+    from . import freetier, promo
     if promo.active():  # free-access promotion: everyone who tapped "Connect free"
         for p in promo.devices():
             ip = ip_for(p["mac"], p["ip"] if not arp else None)
             if ip:
                 out[base].add(ip)
+    if freetier.enabled():
+        # Free basic tier: online, but also in the slow list. Anyone already
+        # online another way (paid, always-online, paying now) keeps full speed.
+        slow = out.setdefault(freetier.alias(), set())
+        for f in freetier.active_devices():
+            ip = ip_for(f["mac"], f["ip"] if not arp else None)
+            if ip and ip not in out[base]:
+                out[base].add(ip)
+                slow.add(ip)
+    old = db.get("free_cleanup_alias")
+    if old and old not in out:
+        out[old] = set()    # tier turned off or renamed: empty the old slow list once
     return out
 
 
@@ -323,6 +335,8 @@ def sync() -> dict:
                     log.error("revoke %s from %s failed: %s", ip, alias, e)
             if alias == base:
                 result["added"], result["removed"] = sorted(ips - have), sorted(have - ips)
+            if alias == db.get("free_cleanup_alias") and not ips:
+                db.set("free_cleanup_alias", "")
         # housekeeping
         t = db.now()
         db.run("UPDATE passes SET status='ended' WHERE status='active' AND ends_at<=?", (t,))

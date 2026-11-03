@@ -1,6 +1,46 @@
 {% extends "admin/base.html" %}
 {% set page = 'promo' %}
 {% block body %}
+<div class="card" style="max-width:720px" id="free">
+  <h2>Free basic tier</h2>
+  <p class="muted" style="margin-top:-4px">Always offer a slow, free connection for messages, email and simple browsing,
+    with your paid plans as the upgrade. Guests tap <em>Use free basic Wi-Fi</em>: no account, no card.</p>
+  <div class="note warn" style="margin:8px 0 12px">Your router does the slowing down. Set up the speed limit for the
+    free list first (OpenWrt: <code>setup.sh</code> does it; OPNsense: a shaper rule, see the network guide),
+    otherwise free guests get full speed.</div>
+  <p>Status: {% if fs.free_enabled == '1' %}<span class="pill" style="background:var(--ok-bg);color:var(--ok)">On</span>
+    · {{ free_devices|length }} device{{ 's' if free_devices|length != 1 }} using it now{% else %}<span class="pill">Off</span>{% endif %}</p>
+  <form method="post" action="/freetier">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label style="display:flex;gap:8px;margin:6px 0 4px"><input type="checkbox" name="free_enabled" {{ 'checked' if fs.free_enabled == '1' }}>
+      <strong>Free basic tier on</strong></label>
+    <label class="f">Name on the sign-in page</label>
+    <input type="text" name="free_title" value="{{ fs.free_title }}" maxlength="60">
+    <label class="f">Description</label>
+    <textarea name="free_text" maxlength="500">{{ fs.free_text }}</textarea>
+    <div class="row">
+      <div><label class="f">Speed shown to guests (optional)</label>
+        <input type="text" name="free_speed_label" value="{{ fs.free_speed_label }}" placeholder="about 2 Mbps" maxlength="40"></div>
+      <div><label class="f">Minutes per device per day</label>
+        <input type="number" name="free_minutes" min="0" max="1440" value="{{ fs.free_minutes }}"></div>
+    </div>
+    <div class="help">0 minutes = no time limit. Resets at midnight in your time zone. Changing it starts everyone fresh.</div>
+    <label class="f">Router list for free devices</label>
+    <input type="text" name="free_alias" value="{{ fs.free_alias }}" pattern="[A-Za-z0-9_]{1,31}">
+    <div class="help">OPNsense alias or OpenWrt set that your router slows down. setup.sh creates <code>free_clients</code>.</div>
+    <button style="margin-top:14px">Save</button>
+  </form>
+  {% if free_devices %}
+  <ul class="devs" style="margin-top:14px">
+    {% for d in free_devices %}
+    <li><div><code>{{ d.mac }}</code><div class="help">{{ d.ip }} · since {{ fmt_ts(d.started_at) }}{% if d.expires_at %} · until {{ fmt_ts(d.expires_at) }}{% endif %}</div></div>
+      <form method="post" action="/freetier"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="mac" value="{{ d.mac }}"><button class="ghost small" name="action" value="kick">Remove for today</button></form></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
 <div class="card" style="max-width:720px">
   <h2>Free-access promotion</h2>
   <p class="muted" style="margin-top:-4px">Let anyone use the Wi-Fi free for a while, like a long weekend, so people can try it.

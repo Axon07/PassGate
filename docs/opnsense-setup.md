@@ -122,6 +122,7 @@ the admin page through OPNsense (section 5).
 | `portal_host` | Host(s) | `10.51.0.2` |
 | `private_nets` | Network(s) | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` |
 | `paid_basic`, `paid_premium`… | External (advanced) | *only if you use speed tiers (section 8)* |
+| `free_clients` | External (advanced) | *only if you offer the free basic tier (section 8)* |
 
 ## 4. NAT: send unpaid web traffic to the portal
 
@@ -225,6 +226,17 @@ a pipe pair per tier and put the tier rules **before** the catch-all rules above
 Recent OPNsense releases accept aliases in shaper rules. If yours doesn't offer them in the
 source/destination fields, upgrade, or stick to the single cap for everyone. Firewall rules don't
 change: internet on/off is still decided by `paid_clients` only.
+
+**Free basic tier.** If you turn on PassGate's free tier (*Admin → Free Wi-Fi*), free devices are put in
+`paid_clients` (so they're online) **and** in `free_clients`. Add a slow pipe pair for it, e.g.
+`free-down` 2 Mbit/s (mask destination) and `free-up` 1 Mbit/s (mask source), and put its rules **first**:
+
+| Rules | Interface | Direction | Source | Destination | Target |
+|---|---|---|---|---|---|
+| seq 1 | GUEST | out | any | `free_clients` | `free-down` |
+| seq 2 | GUEST | in | `free_clients` | any | `free-up` |
+
+Without these rules, free guests would get full speed. Paying guests are never put in `free_clients`.
 
 Caps are per device. Added together, the caps for everyone online at once will be more than your
 connection can carry, which is fine. The point is that one guest can't take it all.

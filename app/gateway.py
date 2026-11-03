@@ -46,6 +46,13 @@ def speed_tiers() -> list[tuple[str, str]]:
     return out
 
 
+def checked_aliases() -> list[str]:
+    """The lists the Test button looks at: allow-list, speed tiers, free tier."""
+    from . import freetier
+    out = [base_alias()] + [a for _, a in speed_tiers()]
+    return out + ([freetier.alias()] if freetier.enabled() else [])
+
+
 class Driver:
     """Every method takes the alias (firewall table) to act on. The base
     alias decides who gets internet; tier aliases only decide speed."""
@@ -159,7 +166,7 @@ class OPNsense(Driver):
 
     def test(self):
         parts = []
-        for alias in [base_alias()] + [a for _, a in speed_tiers()]:
+        for alias in checked_aliases():
             try:
                 parts.append(f"'{alias}': {len(self.list_allowed(alias))} entries")
             except Exception as e:
@@ -250,7 +257,7 @@ class OpenWrt(Driver):
     def test(self):
         version = self._run("version").strip()
         parts = []
-        for alias in [base_alias()] + [a for _, a in speed_tiers()]:
+        for alias in checked_aliases():
             try:
                 parts.append(f"'{alias}': {len(self.list_allowed(alias))} entries")
             except Exception as e:

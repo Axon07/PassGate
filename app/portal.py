@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import access, billing, db
 from . import extras as xs
-from . import promo, tls
+from . import freetier, promo, tls
 from .templating import STATIC_DIR, render
 from .gateway import valid_mac
 from .util import check_pw, hash_pw
@@ -82,7 +82,17 @@ def home(request: Request, msg: str = "", err: str = ""):
         request.session["uid"] = device_owner
         return RedirectResponse("/account", status_code=303)
     return render("home.html", request=request, plans=plans(), msg=msg, err=err,
-                  device_known=bool(mac), xs=xs, **promo_ctx(mac))
+                  device_known=bool(mac), xs=xs, **promo_ctx(mac), **free_ctx(mac))
+
+
+def free_ctx(mac):
+    """What the sign-in page should say about the free basic tier."""
+    if not freetier.enabled() or promo.active():   # a promotion is better than the free tier
+        return {"free_on": False}
+    st = freetier.status(mac)
+    return {"free_on": True, "free_mine": st["on"], "free_until": st["until"], "free_used": st["used_up"],
+            "free_title": freetier.get("free_title"), "free_text": freetier.get("free_text"),
+            "free_speed": freetier.get("free_speed_label"), "free_minutes": freetier.minutes()}
 
 
 def promo_ctx(mac):
@@ -107,6 +117,28 @@ def free(request: Request):
         return RedirectResponse("/?err=The+free+access+period+has+ended.", status_code=303)
     access.sync()
     return RedirectResponse("/?msg=free", status_code=303)
+
+
+@app.post("/basic")
+def basic(request: Request, action: str = Form("start")):
+    """Free basic tier: one tap, slow internet (optionally a few minutes a day)."""
+    ip = client_ip(request)
+    mac = access.identify(ip)[0]
+    if not mac:
+        return RedirectResponse("/?err=Couldn%27t+identify+this+device.+Reconnect+to+the+Wi-Fi+and+try+again.",
+                                status_code=303)
+    if action == "stop":
+        freetier.stop(mac)
+        access.sync()
+        return RedirectResponse("/", status_code=303)
+    result = freetier.claim(mac, ip)
+    if result == "off":
+        return RedirectResponse("/?err=Free+Wi-Fi+isn%27t+available+right+now.", status_code=303)
+    if result == "used":
+        return RedirectResponse("/?err=You%27ve+used+today%27s+free+time.+It+resets+at+midnight%2C+"
+                                "or+pick+a+pass+below.", status_code=303)
+    access.sync()
+    return RedirectResponse("/", status_code=303)
 
 
 def _joined_page(owner_id, dev, fresh=False):
@@ -405,11 +437,15 @@ async def stripe_webhook(request: Request):
 @app.get("/api/captive")
 def captive_api(request: Request):
     """RFC 8908 Captive Portal API (advertise it with DHCP option 114)."""
-    _, uid = access.identify(client_ip(request))
+    mac, uid = access.identify(client_ip(request))
     online = bool(uid and access.has_access(uid))
+    until = access.access_until(uid) if online else None
+    if not online and freetier.enabled():
+        st = freetier.status(mac)
+        online, until = st["on"], st["until"]
     out = {"captive": not online, "user-portal-url": (tls.portal_url() or "").rstrip("/") + "/"}
-    if online:
-        out["seconds-remaining"] = max(0, (access.access_until(uid) or 0) - db.now())
+    if online and until:
+        out["seconds-remaining"] = max(0, until - db.now())
     return JSONResponse(out, media_type="application/captive+json")
 
 

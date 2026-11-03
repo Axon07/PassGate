@@ -14,6 +14,9 @@
 #   SET          name of the allow-list set                 (default: paid_clients)
 #   PG_USER      login name for PassGate                    (default: passgate)
 #   PORTAL_HOST  optional. A name like wifi.example.com; adds a local DNS record for it.
+#   FREE_SET     set for PassGate's free basic tier         (default: free_clients)
+#   FREE_DOWN    free tier speed per device, Mbit/s down    (default: 2)
+#   FREE_UP      free tier speed per device, Mbit/s up      (default: 1)
 #
 # Safe to run again (it replaces its own settings). To undo everything:
 #   sh setup.sh remove
@@ -24,9 +27,13 @@ PORTAL_ZONE="${PORTAL_ZONE:-lan}"
 WAN_ZONE="${WAN_ZONE:-wan}"
 SET="${SET:-paid_clients}"
 PG_USER="${PG_USER:-passgate}"
+FREE_SET="${FREE_SET:-free_clients}"
+FREE_DOWN="${FREE_DOWN:-2}"
+FREE_UP="${FREE_UP:-1}"
 HELPER=/usr/libexec/passgate-gate
 ACL=/usr/share/rpcd/acl.d/passgate.json
-SECTIONS="passgate_set passgate_dns passgate_dhcp passgate_api passgate_portal passgate_private passgate_paid passgate_redirect"
+FREE_NFT=/etc/nftables.d/50-passgate-free.nft
+SECTIONS="passgate_set passgate_free_set passgate_dns passgate_dhcp passgate_api passgate_portal passgate_private passgate_paid passgate_redirect"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -38,7 +45,7 @@ remove_all() {
 		uci -q del_list dhcp.@dnsmasq[0].address="$(cat /etc/passgate-dns)" || true
 		rm -f /etc/passgate-dns
 	fi
-	rm -f "$HELPER" "$ACL"
+	rm -f "$HELPER" "$ACL" "$FREE_NFT"
 	[ -f /etc/sysupgrade.conf ] && sed -i '\#passgate#d' /etc/sysupgrade.conf
 	return 0
 }
@@ -65,6 +72,11 @@ fi
 [ -n "$PASSWORD" ] || die "set PASSWORD='...' (PassGate uses it to log in to the router)"
 printf '%s' "$PORTAL_IP" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || die "set PORTAL_IP to the PassGate container's IPv4 address"
 printf '%s' "$SET" | grep -Eq '^[A-Za-z0-9_]{1,31}$' || die "SET may only use letters, digits and _"
+printf '%s' "$FREE_SET" | grep -Eq '^[A-Za-z0-9_]{1,31}$' || die "FREE_SET may only use letters, digits and _"
+[ "$FREE_SET" != "$SET" ] || die "FREE_SET and SET must be different"
+kbytes() { printf '%s' "$1" | grep -Eq '^[0-9]+([.][0-9]+)?$' && awk -v m="$1" 'BEGIN { k = int(m * 125); if (k < 1) k = 1; print k }'; }
+FREE_DOWN_KB="$(kbytes "$FREE_DOWN")" || die "FREE_DOWN must be a number of Mbit/s, e.g. 2"
+FREE_UP_KB="$(kbytes "$FREE_UP")" || die "FREE_UP must be a number of Mbit/s, e.g. 1"
 command -v fw4 >/dev/null 2>&1 || die "this needs OpenWrt 22.03 or newer (firewall4). Older releases aren't supported."
 zone_section() {
 	for z in $(uci show firewall | sed -n 's/^firewall\.\([^.=]*\)=zone$/\1/p'); do
@@ -150,7 +162,7 @@ uci add_list rpcd.passgate.write='passgate'
 
 # Keep the helper and its permission file across firmware upgrades (sysupgrade)
 touch /etc/sysupgrade.conf
-for f in "$HELPER" "$ACL"; do grep -qx "$f" /etc/sysupgrade.conf || echo "$f" >> /etc/sysupgrade.conf; done
+for f in "$HELPER" "$ACL" "$FREE_NFT"; do grep -qx "$f" /etc/sysupgrade.conf || echo "$f" >> /etc/sysupgrade.conf; done
 
 # --- Firewall ----------------------------------------------------------------
 for s in $SECTIONS; do uci -q delete "firewall.$s" || true; done
@@ -160,6 +172,25 @@ uci set firewall.passgate_set=ipset
 uci set firewall.passgate_set.name="$SET"
 uci set firewall.passgate_set.family='ipv4'
 uci add_list firewall.passgate_set.match='src_ip'
+
+# Free basic tier: PassGate puts free devices in the allow-list (so they're
+# online) and in this set, which is held to a low speed per device.
+uci set firewall.passgate_free_set=ipset
+uci set firewall.passgate_free_set.name="$FREE_SET"
+uci set firewall.passgate_free_set.family='ipv4'
+uci add_list firewall.passgate_free_set.match='src_ip'
+mkdir -p /etc/nftables.d
+cat > "$FREE_NFT" <<EOF
+# PassGate free basic tier: speed limit per device (written by PassGate's setup.sh;
+# change FREE_DOWN / FREE_UP and run setup.sh again rather than editing this).
+set pg_free_down { type ipv4_addr; flags dynamic, timeout; timeout 1m; }
+set pg_free_up { type ipv4_addr; flags dynamic, timeout; timeout 1m; }
+chain passgate_free {
+	type filter hook forward priority filter - 1; policy accept;
+	ip daddr @$FREE_SET update @pg_free_down { ip daddr limit rate over $FREE_DOWN_KB kbytes/second burst $((FREE_DOWN_KB * 2)) kbytes } counter drop comment "PassGate: free tier download limit"
+	ip saddr @$FREE_SET update @pg_free_up { ip saddr limit rate over $FREE_UP_KB kbytes/second burst $((FREE_UP_KB * 2)) kbytes } counter drop comment "PassGate: free tier upload limit"
+}
+EOF
 
 # Everyone on the guest network: DNS and DHCP from the router, and the portal itself
 uci set firewall.passgate_dns=rule
@@ -263,4 +294,5 @@ say "In PassGate -> Settings:"
 say "  Router: OpenWrt     OpenWrt address: http://<this router's IP as PassGate sees it>"
 say "  OpenWrt user: $PG_USER     OpenWrt password: (the PASSWORD you used)     Allow-list name: $SET"
 say "then press 'Test Stripe & router connection'."
+say "Free basic tier (optional, Admin -> Free Wi-Fi): router list '$FREE_SET', limited to $FREE_DOWN Mbit/s down, $FREE_UP Mbit/s up per device."
 command -v conntrack >/dev/null 2>&1 || say "Tip: install the 'conntrack' package so ended passes cut open connections right away."

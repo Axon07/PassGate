@@ -792,3 +792,64 @@ def test_30_letsencrypt_settings_and_lego(tmp_path, monkeypatch):
     assert prov == "namecheap" and env["NAMECHEAP_API_KEY"] == "k"
     page = adm.get("/https")
     adm.post("/https", data={"csrf": csrf(page), "tls_mode": "off"})
+
+
+# ---- free basic tier ---------------------------------------------------------------
+
+def test_31_free_basic_tier():
+    from app import freetier
+    adm = _admin()
+    slow = lambda: DryRun.tables.get("free_clients", set())  # noqa: E731
+    c = guest("10.50.9.20", "90:00:00:00:00:20")
+    assert "Use free basic Wi-Fi" not in c.get("/").text
+    assert "isn%27t+available" in c.post("/basic").headers["location"]
+    page = adm.get("/promo")
+    assert "Free basic tier" in page.text
+    adm.post("/freetier", data={"csrf": csrf(page), "free_enabled": "on", "free_title": "Free basic Wi-Fi",
+                                "free_text": "Slow but free.", "free_speed_label": "about 2 Mbps",
+                                "free_minutes": "0", "free_alias": "free_clients"})
+    home = c.get("/").text
+    assert "Use free basic Wi-Fi" in home and "about 2 Mbps" in home and "Full-speed passes" in home
+    assert c.post("/basic").headers["location"] == "/"
+    assert "10.50.9.20" in allowed() and "10.50.9.20" in slow()       # online, but slowed
+    home = c.get("/").text.replace("&#39;", "'")
+    assert "You're on Free basic Wi-Fi" in home and "Upgrade to full speed" in home
+    assert c.get("/api/captive").json()["captive"] is False
+    assert "free basic tier is on" in adm.get("/").text
+    # a device that's online another way (here: always-online) is never slowed
+    access.add_bypass("90:00:00:00:00:21", "owner's laptop")
+    b = guest("10.50.9.21", "90:00:00:00:00:21")
+    b.post("/basic")
+    assert "10.50.9.21" in allowed() and "10.50.9.21" not in slow()
+    # disconnect
+    c.post("/basic", data={"action": "stop"})
+    assert "10.50.9.20" not in allowed() and "10.50.9.20" not in slow()
+    # a daily limit: the window ends, and today's time is then used up
+    page = adm.get("/promo")
+    adm.post("/freetier", data={"csrf": csrf(page), "free_enabled": "on", "free_minutes": "30",
+                                "free_alias": "free_clients", "free_title": "Free basic Wi-Fi", "free_text": "x"})
+    assert "(30 min a day)" in c.get("/").text
+    c.post("/basic")
+    assert "10.50.9.20" in slow()
+    db.run("UPDATE free_devices SET expires_at=? WHERE mac=?", (db.now() - 1, "90:00:00:00:00:20"))
+    access.sync()
+    assert "10.50.9.20" not in allowed()
+    assert "used+today" in c.post("/basic").headers["location"]
+    assert "used today's free time" in c.get("/").text.replace("&#39;", "'")
+    # next day it's available again
+    db.run("UPDATE free_devices SET day='2000-01-01' WHERE mac=?", ("90:00:00:00:00:20",))
+    assert c.post("/basic").headers["location"] == "/" and "10.50.9.20" in slow()
+    # the owner removes it for today
+    page = adm.get("/promo")
+    assert "90:00:00:00:00:20" in page.text
+    adm.post("/freetier", data={"csrf": csrf(page), "action": "kick", "mac": "90:00:00:00:00:20"})
+    assert "10.50.9.20" not in allowed()
+    # turning it off empties the slow list on the router too
+    c2 = guest("10.50.9.22", "90:00:00:00:00:22")
+    c2.post("/basic")
+    assert "10.50.9.22" in slow()
+    page = adm.get("/promo")
+    adm.post("/freetier", data={"csrf": csrf(page), "free_alias": "free_clients", "free_minutes": "30"})
+    assert not freetier.enabled() and slow() == set() and "10.50.9.22" not in allowed()
+    assert db.get("free_cleanup_alias") == ""
+    assert "Use free basic Wi-Fi" not in c2.get("/").text

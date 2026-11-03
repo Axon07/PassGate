@@ -1,5 +1,6 @@
 """Owner dashboard: first-run setup, plans, settings, guests. Served on its
 own port so it can be kept off the guest network."""
+import re
 import secrets
 
 from fastapi import FastAPI, Form, Request
@@ -9,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from datetime import datetime
 
-from . import access, billing, db, promo, tls
+from . import access, billing, db, freetier, promo, tls
 from .gateway import get_driver, speed_tiers, valid_mac
 from .templating import STATIC_DIR, TIMEZONES, render
 from .util import check_pw, fmt_ts, hash_pw, ip_in, tz
@@ -189,6 +190,9 @@ def dashboard(request: Request):
     if db.get("gateway_driver") == "dryrun":
         warnings.append("Router is in dry-run mode — payments work but nobody is actually let online. "
                         "Choose your router in Settings when your firewall is ready.")
+    if freetier.enabled():
+        warnings.append(f"The free basic tier is on ({len(freetier.active_devices())} devices using it now). "
+                        f"Make sure your router slows the '{freetier.alias()}' list, or free guests get full speed.")
     if promo.active():
         warnings.append(f"A free-access promotion is running until {fmt_ts(promo.active()[1])} "
                         f"({len(promo.devices())} devices connected free). Manage it under Promotions.")
@@ -574,8 +578,40 @@ def promo_page(request: Request, msg: str = ""):
     status = ("off" if db.get("promo_enabled") != "1" else "invalid" if not w
               else "scheduled" if t < w[0] else "active" if t < w[1] else "ended")
     s = {k: promo.get(k) for k in promo.SETTINGS}
+    fs = {k: freetier.get(k) for k in freetier.SETTINGS}
     return render("admin/promo.html", request=request, s=s, status=status, window=w, msg=msg,
-                  devices=promo.devices())
+                  devices=promo.devices(), fs=fs, free_devices=freetier.active_devices())
+
+
+@app.post("/freetier")
+async def freetier_save(request: Request):
+    if (r := guard(request)):
+        return r
+    f = await request.form()
+    if not csrf_ok(request, f.get("csrf", "")):
+        return RedirectResponse("/promo", status_code=303)
+    if f.get("action") == "kick":
+        freetier.stop(f.get("mac", ""))
+        msg = "Device removed from the free tier for today."
+    else:
+        old_alias, was_on, old_minutes = freetier.alias(), freetier.enabled(), freetier.minutes()
+        db.set("free_enabled", "1" if f.get("free_enabled") else "0")
+        for k in ("free_title", "free_text", "free_speed_label"):
+            db.set(k, f.get(k, "").strip()[:500])
+        alias = f.get("free_alias", "").strip()
+        if re.fullmatch(r"[A-Za-z0-9_]{1,31}", alias) and alias != access.base_alias():
+            db.set("free_alias", alias)
+        try:
+            db.set("free_minutes", str(max(0, min(1440, int(f.get("free_minutes") or 0)))))
+        except ValueError:
+            pass
+        if was_on and (not freetier.enabled() or freetier.alias() != old_alias):
+            db.set("free_cleanup_alias", old_alias)   # empty the old slow list on the router
+        if freetier.minutes() != old_minutes:
+            freetier.reset()                          # new rules start everyone fresh
+        msg = "Saved"
+    access.sync()
+    return RedirectResponse("/promo?msg=" + msg.replace(" ", "+") + "#free", status_code=303)
 
 
 @app.post("/promo")

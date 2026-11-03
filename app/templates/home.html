@@ -15,10 +15,31 @@
 {% elif promo_thanks %}
 <div class="note ok">{{ promo_after_text }}</div>
 {% endif %}
+{% if free_on %}
+<div class="card free">
+  {% if free_mine %}
+    <p style="margin:0 0 4px"><span class="dot on"></span> <strong>You're on {{ free_title }}</strong>{% if free_until %} until {{ fmt_ts(free_until) }}{% endif %}.</p>
+    <p class="muted" style="margin:0">{{ free_text }}</p>
+    <form method="post" action="/basic"><input type="hidden" name="action" value="stop">
+      <button class="ghost small" style="margin-top:10px">Disconnect</button></form>
+  {% else %}
+    <h2>{{ free_title }}{% if free_speed %} <span class="muted" style="font-weight:400;font-size:.9rem">· {{ free_speed }}</span>{% endif %}</h2>
+    <p class="muted" style="margin:0 0 12px">{{ free_text }}</p>
+    {% if free_used %}
+      <p class="help" style="margin:0">You've used today's free time. It's available again tomorrow.</p>
+    {% else %}
+      <form method="post" action="/basic"><button class="ghost full" style="margin-top:0">
+        Use free basic Wi-Fi{% if free_minutes %} ({{ free_minutes }} min a day){% endif %}</button></form>
+      <p class="help" style="text-align:center;margin-bottom:0">No account or card needed.</p>
+    {% endif %}
+  {% endif %}
+</div>
+{% endif %}
 {% if not promo_on %}<p class="lead">{{ welcome_text }}</p>{% endif %}
 {% if err %}<div class="note err">{{ err }}</div>{% endif %}
 {% if msg and msg != 'free' %}<div class="note ok">{{ msg }}</div>{% endif %}
-{% if promo_on %}<h2 style="font-size:1.05rem;margin:22px 0 10px">{{ 'Keep it going after the free period' if promo_mine else 'Or get your own pass' }}</h2>{% endif %}
+{% if promo_on %}<h2 style="font-size:1.05rem;margin:22px 0 10px">{{ 'Keep it going after the free period' if promo_mine else 'Or get your own pass' }}</h2>
+{% elif free_on %}<h2 style="font-size:1.05rem;margin:22px 0 10px">{{ 'Upgrade to full speed' if free_mine else 'Full-speed passes' }}</h2>{% endif %}
 
 {% if plans %}
 <form method="post" action="/start">
