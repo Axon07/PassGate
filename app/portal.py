@@ -40,7 +40,7 @@ async def captive_redirect(request: Request, call_next):
     requests here; anything not addressed to the portal gets bounced to it,
     which is what makes the 'Sign in to network' sheet appear."""
     path = request.url.path
-    if path.startswith(("/static", "/stripe/webhook", "/api/captive", "/healthz")):
+    if path.startswith(("/static", "/brand/", "/stripe/webhook", "/api/captive", "/healthz")):
         return await call_next(request)
     portal = tls.portal_url()
     if portal:
@@ -472,6 +472,12 @@ def captive_api(request: Request):
     if online and until:
         out["seconds-remaining"] = max(0, until - db.now())
     return JSONResponse(out, media_type="application/captive+json")
+
+
+@app.get("/brand/logo")
+def brand_logo():
+    from . import branding
+    return branding.response()
 
 
 @app.get("/healthz")

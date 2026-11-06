@@ -918,3 +918,47 @@ def test_32_vouchers():
         == "/vouchers?msg=Batch+deleted"
     # join codes still work through the same box (6 characters)
     assert vouchers.looks_like_voucher("ABCD-EFGH") and not vouchers.looks_like_voucher("ABC-DEF")
+
+
+# ---- branding ----------------------------------------------------------------------
+
+def _png(w=4, h=2):
+    import struct
+    import zlib
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    raw = b"".join(b"\x00" + b"\x10\x60\x50\xff" * w for _ in range(h))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def test_33_logo():
+    adm = _admin()
+    c = guest("10.50.11.1", "b0:00:00:00:00:01")
+    name = db.get("site_name")
+    assert f"<h1>{name}</h1>" in c.get("/").text and 'class="logo' not in c.get("/").text   # text by default
+    page = adm.get("/settings")
+    assert "Upload a logo" in page.text
+    # not an image (even if it's called .png), and SVG: refused
+    r = adm.post("/settings/logo", data={"csrf": csrf(page)}, files={"logo": ("logo.png", b"<svg onload=alert(1)>", "image/png")})
+    assert "PNG%2C" in r.headers["location"] or "PNG," in r.headers["location"]
+    assert adm.get("/brand/logo").status_code == 404
+    # a real PNG
+    r = adm.post("/settings/logo", data={"csrf": csrf(page)}, files={"logo": ("mine.png", _png(), "image/png")})
+    assert "Logo+saved" in r.headers["location"]
+    home = c.get("/").text
+    assert 'class="top brand"' in home and 'img class="logo" src="/brand/logo?v=' in home and f'alt="{name}"' in home
+    img = c.get("/brand/logo")                      # the portal serves it too, even to unpaid guests
+    assert img.status_code == 200 and img.headers["content-type"] == "image/png" and img.content == _png()
+    assert img.headers["x-content-type-options"] == "nosniff"
+    assert 'img class="logo admin"' in adm.get("/").text
+    page = adm.get("/settings")
+    assert "Replace logo" in page.text and "Remove logo" in page.text
+    # too big
+    big = _png() + b"\x00" * (2 * 1024 * 1024)
+    assert "over+2+MB" in adm.post("/settings/logo", data={"csrf": csrf(page)},
+                                   files={"logo": ("big.png", big, "image/png")}).headers["location"]
+    # remove: back to the name
+    adm.post("/settings/logo", data={"csrf": csrf(page), "action": "remove"})
+    assert f"<h1>{name}</h1>" in c.get("/").text and c.get("/brand/logo").status_code == 404

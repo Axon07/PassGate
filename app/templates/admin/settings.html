@@ -2,6 +2,27 @@
 {% set page = 'settings' %}
 {% block body %}
 {% if test_results %}<div class="note warn">{% for r in test_results %}<div>{{ r }}</div>{% endfor %}</div>{% endif %}
+<div class="card" style="max-width:720px" id="branding">
+  <h2>Logo</h2>
+  <p class="muted" style="margin-top:-4px">Shown at the top of the guest sign-in page (centred) and of these admin pages,
+    in place of the network name. Without a logo, the name is shown.</p>
+  {% if logo_url %}
+  <div class="logo-preview"><img src="{{ logo_url }}" alt="{{ site_name }}"></div>
+  {% endif %}
+  <form method="post" action="/settings/logo" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f" for="logo">{{ 'Replace logo' if logo_url else 'Upload a logo' }}</label>
+    <input id="logo" type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif" required>
+    <div class="help">PNG, JPEG, WebP or GIF, up to 2 MB. A wide logo with a transparent background looks best;
+      it's shown up to 72 px tall on the sign-in page.</div>
+    <button style="margin-top:10px">Save logo</button>
+  </form>
+  {% if logo_url %}
+  <form method="post" action="/settings/logo" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost small" name="action" value="remove">Remove logo</button></form>
+  {% endif %}
+</div>
+
 <div class="card" style="max-width:720px">
   <form method="post" action="/settings">
     <input type="hidden" name="csrf" value="{{ csrf }}">

@@ -42,6 +42,7 @@ Guests join your open Wi-Fi, the sign-in page pops up, they pick a **day, weeken
 - **Passes stack:** a day pass bought on top of a weekend pass adds time
 - **Extra device slots** at checkout or later, **prorated** for the time left
 - **Optional volume discount:** percent or dollar amount off each further slot
+- **Your branding:** upload a logo for the sign-in page, the admin pages and printed vouchers, or just use your network name
 - **Vouchers** when you want them: printable codes for comps, bookings or pre-paid cards, timed from first use, with a use-by date and several devices per code
 - **Free basic tier:** an always-available slow connection for messages and email, optionally a few minutes a day, with your passes as the upgrade
 - **Free promotions:** open it up for a long weekend with a one-tap "Connect free" button and your own message, then a thank-you note pointing to the paid plans

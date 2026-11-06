@@ -33,6 +33,8 @@ def render(name: str, status_code: int = 200, **ctx) -> HTMLResponse:
     ctx.setdefault("site_name", db.get("site_name"))
     ctx.setdefault("support_text", db.get("support_text"))
     ctx.setdefault("welcome_text", db.get("welcome_text"))
+    from . import branding
+    ctx.setdefault("logo_url", branding.url())
     request = ctx.pop("request", None)
     if request is not None:
         ctx.setdefault("csrf", request.session.get("csrf", ""))

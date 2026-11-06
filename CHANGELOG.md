@@ -3,6 +3,7 @@
 ## Unreleased
 
 **New**
+- **Your logo.** Upload a logo in *Settings → Logo* (PNG, JPEG, WebP or GIF, up to 2 MB). It replaces the network name at the top of the guest sign-in pages (centred), the admin pages (top left) and printed vouchers. Without a logo, the name is shown as before.
 - **Vouchers.** Make batches of printable codes for access you hand out yourself (comps, campsite bookings, pre-paid cards). Each batch sets how long a code lasts from first use, how many devices it covers, an optional use-by date, speed tier and a note for the printed card. Guests enter codes in the same sign-in box as join codes (now *Have a voucher or a join code?*), with no account or card. The new *Vouchers* admin page has a printable sheet, CSV export, per-code status, and cancel or delete.
 
 ## v0.3.0

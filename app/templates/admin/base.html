@@ -9,7 +9,8 @@
 </head>
 <body>
 <div class="wrap wide">
-  <header class="top"><h1>{{ site_name }} <span class="muted" style="font-weight:400">admin</span></h1>
+  <header class="top"><h1>{% if logo_url %}<img class="logo admin" src="{{ logo_url }}" alt="{{ site_name }}">{% else %}{{ site_name }}{% endif %}
+    <span class="muted" style="font-weight:400">admin</span></h1>
     {% if nav is not defined or nav %}
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="ghost small">Log out</button></form>{% endif %}

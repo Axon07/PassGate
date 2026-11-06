@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from datetime import datetime
 
-from . import access, billing, db, freetier, promo, tls, vouchers
+from . import access, billing, branding, db, freetier, promo, tls, vouchers
 from .gateway import get_driver, speed_tiers, valid_mac
 from .templating import STATIC_DIR, TIMEZONES, render
 from .util import check_pw, fmt_ts, hash_pw, ip_in, tz
@@ -297,10 +297,33 @@ async def plan_save(request: Request, pid: int):
 # ---- settings ----------------------------------------------------------------
 
 @app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request, msg: str = ""):
+def settings_page(request: Request, msg: str = "", err: str = ""):
     if (r := guard(request)):
         return r
-    return render("admin/settings.html", request=request, fields=SETTING_FIELDS, s=db.all_settings(), msg=msg)
+    return render("admin/settings.html", request=request, fields=SETTING_FIELDS, s=db.all_settings(), msg=msg,
+                  err=err[:200])
+
+
+@app.get("/brand/logo")
+def brand_logo():
+    return branding.response()
+
+
+@app.post("/settings/logo")
+async def settings_logo(request: Request):
+    if (r := guard(request)):
+        return r
+    f = await request.form()
+    if not csrf_ok(request, f.get("csrf", "")):
+        return RedirectResponse("/settings", status_code=303)
+    if f.get("action") == "remove":
+        branding.remove()
+        return RedirectResponse("/settings?msg=Logo+removed.+The+name+is+shown+instead.#branding", status_code=303)
+    up = f.get("logo")
+    err = branding.save(await up.read(branding.MAX_BYTES + 1) if up is not None and getattr(up, "filename", "") else b"")
+    if err:
+        return RedirectResponse("/settings?err=" + err.replace(" ", "+") + "#branding", status_code=303)
+    return RedirectResponse("/settings?msg=Logo+saved#branding", status_code=303)
 
 
 @app.post("/settings")

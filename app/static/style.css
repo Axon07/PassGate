@@ -76,3 +76,15 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 5px; }
 .pill { font-size: .75rem; padding: 2px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); }
 .card.promo { border: 2px solid var(--accent); background: linear-gradient(180deg, var(--ok-bg), var(--card) 70%); }
 .card.promo h2 { font-size: 1.3rem; }
+
+/* Logo in place of the network name */
+header.top h1 { display: flex; align-items: center; gap: 10px; }
+header.top.brand { display: grid; grid-template-columns: 1fr auto 1fr; }
+header.top.brand h1 { justify-content: center; }
+header.top.brand .right { display: flex; justify-content: flex-end; }
+img.logo { display: block; max-height: 72px; max-width: min(260px, 60vw); width: auto; height: auto; }
+img.logo.admin { max-height: 40px; max-width: 200px; }
+.logo-preview { background: repeating-conic-gradient(#0000000d 0% 25%, transparent 0% 50%) 50% / 16px 16px;
+  border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; justify-content: center; margin-bottom: 10px; }
+.logo-preview img { max-height: 90px; max-width: 100%; }
+header.top button { white-space: nowrap; }

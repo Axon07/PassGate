@@ -10,7 +10,12 @@
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>{{ site_name }}</h1>{% block topright %}{% endblock %}</header>
+  {% if logo_url %}
+  <header class="top brand"><span></span><h1><img class="logo" src="{{ logo_url }}" alt="{{ site_name }}"></h1>
+    <div class="right">{% block topright %}{% endblock %}</div></header>
+  {% else %}
+  <header class="top"><h1>{{ site_name }}</h1>{{ self.topright() }}</header>
+  {% endif %}
   <div class="wave"></div>
   {% block body %}{% endblock %}
   {% if support_text %}<footer>{{ support_text }}</footer>{% endif %}

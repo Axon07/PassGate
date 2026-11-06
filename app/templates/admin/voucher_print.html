@@ -25,7 +25,7 @@
 <div class="grid">
 {% for r in rows %}
   <div class="v">
-    <div class="site">{{ site_name }} Wi-Fi</div>
+    <div class="site">{% if logo_url %}<img src="{{ logo_url }}" alt="{{ site_name }}" style="max-height:12mm;max-width:60mm;display:block">{% else %}{{ site_name }} Wi-Fi{% endif %}</div>
     <div class="what">Voucher · {{ describe(b.duration_minutes) }} from first use · {{ b.max_devices }} device{{ 's' if b.max_devices != 1 }}{% if b.use_by %} · use by {{ fmt_ts(b.use_by).split(',')[0] }}{% endif %}</div>
     <div class="code">{{ r.v.code }}</div>
     <div class="how">Join the Wi-Fi and the sign-in page opens{% if host %} (or go to <b>{{ host }}</b>){% endif %}.
